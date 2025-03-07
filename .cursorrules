@@ -1,0 +1,69 @@
+{
+  "database": {
+    "title": "Database Change Rules",
+    "rules": [
+      {
+        "id": "db-1",
+        "pattern": "CREATE TABLE|ALTER TABLE|DROP TABLE|CREATE SCHEMA|DROP SCHEMA",
+        "message": "Database schema changes should be done through Supabase migrations. Run `npx supabase migration new your_migration_name` and edit the generated SQL file."
+      },
+      {
+        "id": "db-2",
+        "pattern": "INSERT INTO|UPDATE|DELETE FROM",
+        "message": "Data manipulation should generally be handled through the Supabase client API in TypeScript rather than raw SQL, unless it's part of a migration or seed file."
+      },
+      {
+        "id": "db-3",
+        "pattern": "src/types/supabase-generated.ts",
+        "message": "This file is auto-generated. Do not edit it directly. Run `npx supabase gen types typescript > src/types/supabase-generated.ts` to update it."
+      },
+      {
+        "id": "db-4",
+        "pattern": "import.*from.*(supabase-schema|supabase/types)",
+        "message": "These files are deprecated. Import types from src/types/supabase-generated.ts instead."
+      },
+      {
+        "id": "db-5",
+        "pattern": "create table|grant|revoke|policy",
+        "message": "When creating tables or changing permissions, ensure RLS policies are properly configured for security."
+      },
+      {
+        "id": "db-6", 
+        "pattern": "Database\\['public'\\]",
+        "message": "When using database types, make sure to import { Database, Tables, TablesInsert, TablesUpdate } from src/types/supabase-generated.ts."
+      },
+      {
+        "id": "db-7",
+        "pattern": "(trigger|function|procedure)",
+        "message": "Database triggers and functions should be defined in migrations and properly documented."
+      },
+      {
+        "id": "db-8",
+        "pattern": "(index|constraint|foreign key)",
+        "message": "Ensure indexes and constraints are properly defined for performance and data integrity."
+      }
+    ],
+    "workflow": [
+      "Make schema changes in a new migration file created with `npx supabase migration new`",
+      "Test locally if possible",
+      "Push changes with `npx supabase db push`", 
+      "Generate updated types with `npx supabase gen types typescript > src/types/supabase-generated.ts`",
+      "Update any affected components to use the new schema"
+    ]
+  },
+  "security": {
+    "title": "Security Best Practices",
+    "rules": [
+      {
+        "id": "sec-1",
+        "pattern": "RLS|row level security|policy",
+        "message": "Ensure Row Level Security policies are properly configured to protect data."
+      },
+      {
+        "id": "sec-2", 
+        "pattern": "createClient|supabase\\.auth",
+        "message": "Ensure auth setup follows best practices and user data is properly protected."
+      }
+    ]
+  }
+} 

@@ -1,6 +1,7 @@
 import { cn } from "@/lib/utils";
 import { useState } from "react";
 import { NavLink, useLocation } from "react-router-dom";
+import { useAuth } from "@/context/AuthContext";
 import {
   Calendar,
   LayoutDashboard,
@@ -13,6 +14,8 @@ import {
   Clock,
   Target,
   Repeat,
+  LogIn,
+  User,
 } from "lucide-react";
 
 interface SidebarLinkProps {
@@ -51,6 +54,7 @@ function SidebarLink({ to, icon: Icon, label, isCollapsed }: SidebarLinkProps) {
 
 export function Sidebar() {
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const { user } = useAuth();
 
   const toggleSidebar = () => {
     setIsCollapsed(!isCollapsed);
@@ -119,6 +123,22 @@ export function Sidebar() {
             label="Settings"
             isCollapsed={isCollapsed}
           />
+          
+          {user ? (
+            <SidebarLink
+              to="/profile"
+              icon={User}
+              label="Profile"
+              isCollapsed={isCollapsed}
+            />
+          ) : (
+            <SidebarLink
+              to="/auth/login"
+              icon={LogIn}
+              label="Login"
+              isCollapsed={isCollapsed}
+            />
+          )}
         </div>
       </div>
     </aside>

@@ -53,13 +53,16 @@ export function WelcomeWidget({ className, onTaskAdded }: WelcomeWidgetProps) {
         description: taskData.description,
         due_date: taskData.dueDate,
         priority: taskData.priority,
-        status: 'pending' as const
+        status: 'pending' as const,
+        // Get user ID if we're using auth
+        user_id: (await supabase.auth.getUser()).data.user?.id
       };
       
-      // Insert into Supabase
-      const { error } = await supabase
+      // Insert into Supabase and return the created record
+      const { data, error } = await supabase
         .from('tasks')
-        .insert([newTask]);
+        .insert([newTask])
+        .select();
         
       if (error) throw error;
       
@@ -70,9 +73,12 @@ export function WelcomeWidget({ className, onTaskAdded }: WelcomeWidgetProps) {
       if (onTaskAdded) {
         onTaskAdded();
       }
+      
+      return true; // Return true to indicate success
     } catch (error) {
       console.error('Error adding task:', error);
       toast.error('Failed to add task');
+      return false; // Return false to indicate failure
     }
   };
   

@@ -1,12 +1,13 @@
 import { CardContainer } from "../common/CardContainer";
 import { AppButton } from "../common/AppButton";
-import { Plus, ChevronLeft, ChevronRight, CalendarDays, Calendar as CalendarIcon, List } from "lucide-react";
-import { useState, useEffect } from "react";
+import { Plus, ChevronLeft, ChevronRight, CalendarDays, Calendar as CalendarIcon, List, Pencil, Trash } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
 import { Modal } from "../common/Modal";
 import { AddEventForm } from "./AddEventForm";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { format, addDays, startOfWeek, endOfWeek, isSameDay, isWithinInterval, parseISO, startOfDay, addHours, isSameWeek } from "date-fns";
+import { addUserIdToData } from "@/utils/supabase-utils";
 
 // Interface for our local calendar events
 interface CalendarEvent {
@@ -37,8 +38,11 @@ export function CalendarView() {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [isAddEventModalOpen, setIsAddEventModalOpen] = useState(false);
+  const [isEditEventModalOpen, setIsEditEventModalOpen] = useState(false);
+  const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [viewMode, setViewMode] = useState<ViewMode>("month");
+  const dayViewRef = useRef<HTMLDivElement>(null);
   
   // Fetch events from Supabase when component mounts
   useEffect(() => {
@@ -126,19 +130,20 @@ export function CalendarView() {
       const startDateTime = `${eventData.date}T${eventData.startTime}:00`;
       const endDateTime = `${eventData.date}T${eventData.endTime}:00`;
       
+      // Prepare event data with user ID
+      const eventWithUserId = await addUserIdToData({
+        title: eventData.title,
+        start_time: startDateTime,
+        end_time: endDateTime,
+        description: eventData.description || null,
+        category: eventData.category,
+        location: null
+      });
+      
       // Insert the event into Supabase
       const { data, error } = await supabase
         .from('events')
-        .insert({
-          title: eventData.title,
-          start_time: startDateTime,
-          end_time: endDateTime,
-          description: eventData.description || null,
-          // Include the category field
-          category: eventData.category,
-          // Note: location is null as it's not in our form
-          location: null
-        })
+        .insert(eventWithUserId)
         .select();
       
       if (error) {
@@ -204,7 +209,7 @@ export function CalendarView() {
     
     // Add empty cells for days before the first day of month
     for (let i = 0; i < firstDayOfMonth; i++) {
-      days.push(<div key={`empty-${i}`} className="h-28 border-t border-l p-2"></div>);
+      days.push(<div key={`empty-${i}`} className="border-t border-l p-2 min-h-0"></div>);
     }
     
     // Add cells for each day of the month
@@ -218,11 +223,11 @@ export function CalendarView() {
       days.push(
         <div 
           key={day} 
-          className={`h-28 border-t border-l p-2 relative ${isToday ? 'bg-primary/5' : ''}`}
+          className={`border-t border-l p-2 relative flex flex-col min-h-0 ${isToday ? 'bg-primary/5' : ''}`}
         >
           <span className={`text-sm font-medium ${isToday ? 'text-primary' : ''}`}>{day}</span>
           
-          <div className="mt-1 overflow-y-auto max-h-[80px] space-y-1">
+          <div className="mt-1 flex-1 overflow-y-auto space-y-1">
             {dayEvents.length > 2 ? (
               <>
                 {dayEvents.slice(0, 2).map(event => (
@@ -254,6 +259,13 @@ export function CalendarView() {
       );
     }
     
+    // Add empty cells for remaining days to complete the grid
+    const totalDays = firstDayOfMonth + daysInMonth;
+    const remainingCells = 42 - totalDays; // 6 rows * 7 days = 42
+    for (let i = 0; i < remainingCells; i++) {
+      days.push(<div key={`empty-end-${i}`} className="border-t border-l p-2 min-h-0"></div>);
+    }
+    
     return days;
   };
 
@@ -267,7 +279,7 @@ export function CalendarView() {
       const isToday = isSameDay(day, new Date());
 
       days.push(
-        <div key={i} className="flex flex-col border-l h-full">
+        <div key={i} className="flex flex-col border-l h-full min-w-0">
           <div className={`p-2 text-center font-medium border-b ${isToday ? 'bg-primary/10' : ''}`}>
             <div>{format(day, 'EEE')}</div>
             <div className={`text-lg ${isToday ? 'text-primary' : ''}`}>{format(day, 'd')}</div>
@@ -276,10 +288,32 @@ export function CalendarView() {
             {dayEvents.map(event => (
               <div 
                 key={event.id} 
-                className={`text-xs p-2 rounded-md ${getCategoryColor(event.category)}`}
+                className={`text-xs p-2 rounded-md ${getCategoryColor(event.category)} group relative`}
               >
                 <div className="font-medium">{event.title}</div>
                 <div>{event.startTime} - {event.endTime}</div>
+                <div className="absolute right-2 top-2 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleEditEvent(event);
+                    }}
+                    className="p-1 hover:bg-black/10 rounded"
+                    title="Edit event"
+                  >
+                    <Pencil size={14} />
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleDeleteEvent(event.id);
+                    }}
+                    className="p-1 hover:bg-black/10 rounded text-red-600"
+                    title="Delete event"
+                  >
+                    <Trash size={14} />
+                  </button>
+                </div>
               </div>
             ))}
           </div>
@@ -288,16 +322,25 @@ export function CalendarView() {
     }
 
     return (
-      <div className="grid grid-cols-7 border-r border-b h-[600px]">
+      <div className="grid grid-cols-7 border-r border-b h-full">
         {days}
       </div>
     );
   };
 
+  useEffect(() => {
+    if (viewMode === "day" && dayViewRef.current) {
+      const now = new Date();
+      const currentHour = now.getHours();
+      const scrollPosition = currentHour * 60; // Each hour block is 60px high
+      dayViewRef.current.scrollTop = scrollPosition - 100; // Scroll to show a bit above current hour
+    }
+  }, [viewMode]);
+
   const renderDayView = () => {
     const hours = [];
     const dayEvents = getEventsForDate(currentDate);
-    const isToday = isSameDay(currentDate, new Date());
+    const currentHour = new Date().getHours();
     
     for (let hour = 0; hour < 24; hour++) {
       const hourTime = addHours(startOfDay(currentDate), hour);
@@ -306,9 +349,10 @@ export function CalendarView() {
         const eventStartHour = parseInt(event.startTime.split(':')[0]);
         return eventStartHour === hour;
       });
+      const isCurrentHour = isSameDay(currentDate, new Date()) && hour === currentHour;
 
       hours.push(
-        <div key={hour} className="flex border-b min-h-[60px]">
+        <div key={hour} className={`flex border-b min-h-[60px] ${isCurrentHour ? 'bg-primary/5' : ''}`}>
           <div className="w-20 p-2 text-right text-sm border-r flex-shrink-0">
             {hourFormatted}
           </div>
@@ -316,10 +360,32 @@ export function CalendarView() {
             {hourEvents.map(event => (
               <div 
                 key={event.id} 
-                className={`p-2 rounded-md ${getCategoryColor(event.category)} mb-1`}
+                className={`p-2 rounded-md ${getCategoryColor(event.category)} mb-1 group relative`}
               >
                 <div className="font-medium">{event.title}</div>
                 <div className="text-xs">{event.startTime} - {event.endTime}</div>
+                <div className="absolute right-2 top-2 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleEditEvent(event);
+                    }}
+                    className="p-1 hover:bg-black/10 rounded"
+                    title="Edit event"
+                  >
+                    <Pencil size={14} />
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleDeleteEvent(event.id);
+                    }}
+                    className="p-1 hover:bg-black/10 rounded text-red-600"
+                    title="Delete event"
+                  >
+                    <Trash size={14} />
+                  </button>
+                </div>
               </div>
             ))}
           </div>
@@ -327,17 +393,7 @@ export function CalendarView() {
       );
     }
 
-    return (
-      <div className="border-r border-b">
-        <div className="p-3 text-xl font-medium border-b">
-          {format(currentDate, 'EEEE, MMMM d, yyyy')}
-          {isToday && <span className="ml-2 text-primary text-sm">Today</span>}
-        </div>
-        <div className="overflow-y-auto max-h-[600px]">
-          {hours}
-        </div>
-      </div>
-    );
+    return hours;
   };
   
   const monthNames = [
@@ -357,9 +413,91 @@ export function CalendarView() {
     }
   };
 
+  const handleEditEvent = (event: CalendarEvent) => {
+    setSelectedEvent(event);
+    setIsEditEventModalOpen(true);
+  };
+
+  const handleDeleteEvent = async (eventId: string) => {
+    if (!confirm('Are you sure you want to delete this event?')) {
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('events')
+        .delete()
+        .eq('id', eventId);
+
+      if (error) {
+        throw error;
+      }
+
+      setEvents(events.filter(event => event.id !== eventId));
+      toast.success('Event deleted successfully');
+    } catch (error) {
+      console.error('Error deleting event:', error);
+      toast.error('Failed to delete event');
+    }
+  };
+
+  const handleUpdateEvent = async (eventData: {
+    title: string;
+    date: string;
+    startTime: string;
+    endTime: string;
+    description?: string;
+    category: "tutoring" | "work" | "personal";
+  }) => {
+    if (!selectedEvent) return;
+
+    try {
+      // Create ISO datetime strings for start and end times
+      const startDateTime = `${eventData.date}T${eventData.startTime}:00`;
+      const endDateTime = `${eventData.date}T${eventData.endTime}:00`;
+
+      const { error } = await supabase
+        .from('events')
+        .update({
+          title: eventData.title,
+          start_time: startDateTime,
+          end_time: endDateTime,
+          description: eventData.description || null,
+          category: eventData.category
+        })
+        .eq('id', selectedEvent.id);
+
+      if (error) {
+        throw error;
+      }
+
+      // Update the local events state
+      setEvents(events.map(event => 
+        event.id === selectedEvent.id
+          ? {
+              ...event,
+              title: eventData.title,
+              date: eventData.date,
+              startTime: eventData.startTime,
+              endTime: eventData.endTime,
+              description: eventData.description,
+              category: eventData.category
+            }
+          : event
+      ));
+
+      setIsEditEventModalOpen(false);
+      setSelectedEvent(null);
+      toast.success('Event updated successfully');
+    } catch (error) {
+      console.error('Error updating event:', error);
+      toast.error('Failed to update event');
+    }
+  };
+
   return (
-    <div className="space-y-6 animate-fade-in">
-      <div className="flex items-center justify-between">
+    <div className="h-[calc(100vh-theme(spacing.20))] flex flex-col animate-fade-in">
+      <div className="flex items-center justify-between mb-4">
         <h1 className="text-3xl font-medium">Calendar</h1>
         <AppButton 
           icon={<Plus size={18} />}
@@ -369,15 +507,15 @@ export function CalendarView() {
         </AppButton>
       </div>
       
-      <CardContainer className="overflow-hidden">
+      <CardContainer className="flex-1 flex flex-col overflow-hidden">
         {isLoading ? (
           <div className="flex items-center justify-center p-12">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
             <span className="ml-3">Loading events...</span>
           </div>
         ) : (
-          <>
-            <div className="flex items-center justify-between mb-6">
+          <div className="flex flex-col h-full">
+            <div className="flex items-center justify-between p-4">
               <div className="flex items-center gap-2">
                 <button 
                   onClick={goToPrevious}
@@ -421,24 +559,44 @@ export function CalendarView() {
               </div>
             </div>
             
-            {viewMode === "month" && (
-              <div className="grid grid-cols-7 border-r border-b">
-                {/* Weekday headers */}
-                {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day) => (
-                  <div key={day} className="p-2 text-center font-medium text-sm border-t border-l">
-                    {day}
+            <div className="flex-1 overflow-hidden">
+              {viewMode === "month" && (
+                <div className="grid grid-cols-7 h-full border-r border-b">
+                  {/* Weekday headers */}
+                  <div className="col-span-7 grid grid-cols-7">
+                    {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day) => (
+                      <div key={day} className="p-2 text-center font-medium text-sm border-t border-l">
+                        {day}
+                      </div>
+                    ))}
                   </div>
-                ))}
-                
-                {/* Calendar days */}
-                {renderCalendarDays()}
-              </div>
-            )}
+                  
+                  {/* Calendar days */}
+                  <div className="col-span-7 grid grid-cols-7 grid-rows-6 flex-1">
+                    {renderCalendarDays()}
+                  </div>
+                </div>
+              )}
 
-            {viewMode === "week" && renderWeekView()}
-            
-            {viewMode === "day" && renderDayView()}
-          </>
+              {viewMode === "week" && (
+                <div className="h-full">
+                  {renderWeekView()}
+                </div>
+              )}
+              
+              {viewMode === "day" && (
+                <div className="h-full overflow-hidden flex flex-col">
+                  <div className="p-3 text-xl font-medium border-b flex-shrink-0">
+                    {format(currentDate, 'EEEE, MMMM d, yyyy')}
+                    {isSameDay(currentDate, new Date()) && <span className="ml-2 text-primary text-sm">Today</span>}
+                  </div>
+                  <div ref={dayViewRef} className="flex-1 overflow-y-auto">
+                    {renderDayView()}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
         )}
       </CardContainer>
       
@@ -451,6 +609,33 @@ export function CalendarView() {
           onSubmit={handleAddEvent}
           onCancel={() => setIsAddEventModalOpen(false)}
         />
+      </Modal>
+
+      <Modal
+        isOpen={isEditEventModalOpen}
+        onClose={() => {
+          setIsEditEventModalOpen(false);
+          setSelectedEvent(null);
+        }}
+        title="Edit Event"
+      >
+        {selectedEvent && (
+          <AddEventForm
+            onSubmit={handleUpdateEvent}
+            onCancel={() => {
+              setIsEditEventModalOpen(false);
+              setSelectedEvent(null);
+            }}
+            initialData={{
+              title: selectedEvent.title,
+              date: selectedEvent.date,
+              startTime: selectedEvent.startTime,
+              endTime: selectedEvent.endTime,
+              description: selectedEvent.description,
+              category: selectedEvent.category
+            }}
+          />
+        )}
       </Modal>
     </div>
   );

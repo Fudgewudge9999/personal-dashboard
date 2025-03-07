@@ -17,9 +17,17 @@ interface AddEventFormProps {
     category: "tutoring" | "work" | "personal";
   }) => void;
   onCancel: () => void;
+  initialData?: {
+    title: string;
+    date: string;
+    startTime: string;
+    endTime: string;
+    description?: string;
+    category: "tutoring" | "work" | "personal";
+  };
 }
 
-export function AddEventForm({ onSubmit, onCancel }: AddEventFormProps) {
+export function AddEventForm({ onSubmit, onCancel, initialData }: AddEventFormProps) {
   // Generate time options in 30-minute intervals
   const timeOptions = [];
   for (let hour = 0; hour < 24; hour++) {
@@ -69,12 +77,12 @@ export function AddEventForm({ onSubmit, onCancel }: AddEventFormProps) {
     return `${endHours.toString().padStart(2, '0')}:${endMinutes.toString().padStart(2, '0')}`;
   };
 
-  const [title, setTitle] = useState("");
-  const [date, setDate] = useState<Date>(new Date());
-  const [startTime, setStartTime] = useState(getCurrentTimeOption());
-  const [endTime, setEndTime] = useState(calculateEndTime(getCurrentTimeOption()));
-  const [description, setDescription] = useState("");
-  const [category, setCategory] = useState<"tutoring" | "work" | "personal">("tutoring");
+  const [title, setTitle] = useState(initialData?.title || "");
+  const [date, setDate] = useState<Date>(initialData ? new Date(initialData.date) : new Date());
+  const [startTime, setStartTime] = useState(initialData?.startTime || getCurrentTimeOption());
+  const [endTime, setEndTime] = useState(initialData?.endTime || calculateEndTime(getCurrentTimeOption()));
+  const [description, setDescription] = useState(initialData?.description || "");
+  const [category, setCategory] = useState<"tutoring" | "work" | "personal">(initialData?.category || "tutoring");
   const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
   
   // Update end time when start time changes
@@ -239,7 +247,7 @@ export function AddEventForm({ onSubmit, onCancel }: AddEventFormProps) {
           Cancel
         </AppButton>
         <AppButton type="submit" disabled={!title.trim() || !date || !startTime || !endTime}>
-          Add Event
+          {initialData ? 'Update Event' : 'Add Event'}
         </AppButton>
       </div>
     </form>

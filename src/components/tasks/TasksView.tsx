@@ -92,7 +92,9 @@ export function TasksView() {
         description: taskData.description,
         due_date: taskData.dueDate,
         priority: taskData.priority,
-        status: 'pending' as const
+        status: 'pending' as const,
+        // Get user ID if we're using auth
+        user_id: (await supabase.auth.getUser()).data.user?.id
       };
       
       // Insert into Supabase

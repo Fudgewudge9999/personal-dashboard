@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { AppButton } from "../common/AppButton";
 import { supabase } from "@/integrations/supabase/client";
+import { addUserIdToData } from "@/utils/supabase-utils";
 
 interface AddCategoryFormProps {
   onSubmit: (category: string) => void;
@@ -18,10 +19,15 @@ export function AddCategoryForm({ onSubmit, onCancel }: AddCategoryFormProps) {
     setIsSubmitting(true);
     
     try {
+      // Add user_id to the category data
+      const categoryWithUserId = await addUserIdToData({
+        name: categoryName.trim()
+      });
+      
       // Save to Supabase
       const { data, error } = await supabase
         .from('categories')
-        .insert([{ name: categoryName.trim() }])
+        .insert([categoryWithUserId])
         .select();
         
       if (error) throw error;

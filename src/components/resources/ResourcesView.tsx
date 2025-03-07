@@ -1,13 +1,15 @@
 import { CardContainer } from "../common/CardContainer";
 import { AppButton } from "../common/AppButton";
-import { Plus, Search, FolderOpen, Bookmark, File, ExternalLink, FolderPlus, X, Folder, Link } from "lucide-react";
+import { Plus, Search, FolderOpen, Bookmark, File, ExternalLink, FolderPlus, X, Folder, Link, MoreVertical, Edit, Trash2 } from "lucide-react";
 import { Badge } from "../common/Badge";
 import { useState, useEffect } from "react";
 import { Modal } from "../common/Modal";
 import { AddResourceForm } from "./AddResourceForm";
+import { EditResourceForm } from "./EditResourceForm";
 import { AddCategoryForm } from "./AddCategoryForm";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+import { addUserIdToData } from "@/utils/supabase-utils";
 
 interface Resource {
   id: string;
@@ -39,6 +41,9 @@ export function ResourcesView() {
   const [showAddResourceModal, setShowAddResourceModal] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [isAddingResource, setIsAddingResource] = useState(false);
+  const [editingResource, setEditingResource] = useState<Resource | null>(null);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [showActionsFor, setShowActionsFor] = useState<string | null>(null);
   
   useEffect(() => {
     fetchCategories();
@@ -106,18 +111,21 @@ export function ResourcesView() {
     try {
       setIsAddingResource(true);
       
+      // Add user_id to the resource data
+      const resourceWithUserId = await addUserIdToData({
+        title: resource.title,
+        type: resource.type,
+        category_id: resource.category_id,
+        url: resource.url,
+        description: resource.description,
+        file_path: resource.file_path,
+        file_size: resource.file_size,
+        file_type: resource.file_type
+      });
+      
       const { data, error } = await supabase
         .from("resources")
-        .insert({
-          title: resource.title,
-          type: resource.type,
-          category_id: resource.category_id,
-          url: resource.url,
-          description: resource.description,
-          file_path: resource.file_path,
-          file_size: resource.file_size,
-          file_type: resource.file_type
-        })
+        .insert(resourceWithUserId)
         .select()
         .single();
 
@@ -305,6 +313,30 @@ export function ResourcesView() {
     setCategories(newCategories);
   };
 
+  const handleUpdateResource = async (resourceId: string, updates: Partial<Resource>) => {
+    try {
+      const { data, error } = await supabase
+        .from('resources')
+        .update(updates)
+        .eq('id', resourceId)
+        .select()
+        .single();
+        
+      if (error) throw error;
+      
+      // Update local state
+      setResources(resources.map(resource => 
+        resource.id === resourceId ? { ...resource, ...updates } : resource
+      ));
+      
+      setShowEditModal(false);
+      toast.success("Resource updated successfully");
+    } catch (error) {
+      console.error('Error updating resource:', error);
+      toast.error('Failed to update resource');
+    }
+  };
+
   return (
     <div className="container mx-auto p-4 max-w-7xl">
       <h1 className="text-2xl font-bold mb-6">Resources</h1>
@@ -412,8 +444,7 @@ export function ResourcesView() {
                 {sortedResources.map((resource) => (
                   <div
                     key={resource.id}
-                    className="flex items-start p-4 border rounded-lg hover:bg-gray-50 cursor-pointer transition-colors"
-                    onClick={() => handleResourceClick(resource)}
+                    className="group flex items-start p-4 border rounded-lg hover:bg-gray-50 transition-colors relative"
                   >
                     <div className="mr-4 mt-1">
                       {resource.type === "document" ? (
@@ -424,7 +455,7 @@ export function ResourcesView() {
                         <Link className="h-8 w-8 text-purple-500" />
                       )}
                     </div>
-                    <div className="flex-1">
+                    <div className="flex-1" onClick={() => handleResourceClick(resource)}>
                       <h3 className="font-medium">{resource.title}</h3>
                       {resource.description && (
                         <p className="text-sm text-muted-foreground mt-1">
@@ -446,6 +477,49 @@ export function ResourcesView() {
                           {getCategoryName(resource.category_id)}
                         </span>
                       </div>
+                    </div>
+                    <div className="relative">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setShowActionsFor(showActionsFor === resource.id ? null : resource.id);
+                        }}
+                        className="opacity-0 group-hover:opacity-100 p-2 hover:bg-gray-100 rounded-full transition-opacity"
+                      >
+                        <MoreVertical size={16} />
+                      </button>
+                      
+                      {showActionsFor === resource.id && (
+                        <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg z-10 border">
+                          <div className="py-1">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setEditingResource(resource);
+                                setShowEditModal(true);
+                                setShowActionsFor(null);
+                              }}
+                              className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                            >
+                              <Edit size={16} className="mr-2" />
+                              Edit
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (confirm('Are you sure you want to delete this resource?')) {
+                                  handleDeleteResource(resource.id, resource.category_id);
+                                }
+                                setShowActionsFor(null);
+                              }}
+                              className="flex items-center w-full px-4 py-2 text-sm text-red-600 hover:bg-gray-100"
+                            >
+                              <Trash2 size={16} className="mr-2" />
+                              Delete
+                            </button>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -478,6 +552,22 @@ export function ResourcesView() {
           onSubmit={handleAddResource}
           onCancel={() => setShowAddResourceModal(false)}
         />
+      </Modal>
+      
+      <Modal
+        isOpen={showEditModal}
+        onClose={() => setShowEditModal(false)}
+        title="Edit Resource"
+        className="max-w-md mx-auto"
+      >
+        {editingResource && (
+          <EditResourceForm
+            resource={editingResource}
+            categories={categories}
+            onSubmit={handleUpdateResource}
+            onCancel={() => setShowEditModal(false)}
+          />
+        )}
       </Modal>
     </div>
   );

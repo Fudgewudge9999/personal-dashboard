@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { supabase } from '@/integrations/supabase/client';
-import type { Database } from '@/integrations/supabase/types';
+import type { Database } from '@/types/supabase-generated';
 
 type FocusSession = Database['public']['Tables']['focus_sessions']['Row'];
 type FocusSessionInsert = Database['public']['Tables']['focus_sessions']['Insert'];
@@ -118,6 +118,15 @@ export const useTimerStore = create<TimerState>((set, get) => ({
     try {
       let actualDuration = 0;
       
+      // Get current user
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      if (userError) throw userError;
+      
+      if (!user) {
+        console.error('No authenticated user found when saving session');
+        return;
+      }
+      
       if (state.sessionStartTime) {
         const totalTime = Date.now() - state.sessionStartTime;
         const activeTime = totalTime - state.totalPausedTime - (state.lastPauseTime ? (Date.now() - state.lastPauseTime) : 0);
@@ -143,7 +152,8 @@ export const useTimerStore = create<TimerState>((set, get) => ({
         duration: state.selectedDuration,
         actual_duration: actualDuration,
         completed,
-        notes: state.currentNotes || null
+        notes: state.currentNotes || null,
+        user_id: user.id  // Add user_id to the session data
       };
 
       const { data: newSession, error: sessionError } = await supabase

@@ -99,13 +99,19 @@ export function TasksWidget({ className, refreshTrigger }: TasksWidgetProps) {
       if (error) throw error;
       
       // Cast the data to the correct type
-      const typedTasks = data?.map(task => ({
+      const typedTasks = (data?.map(task => ({
         id: task.id,
         title: task.title,
         status: task.status as "pending" | "completed",
         priority: task.priority as "high" | "medium" | "low",
         due_date: task.due_date
-      })) || [];
+      })) || []).sort((a, b) => {
+        // First sort by completion status
+        if (a.status === 'completed' && b.status === 'pending') return 1;
+        if (a.status === 'pending' && b.status === 'completed') return -1;
+        // Then sort by created_at date within each status group
+        return 0; // Maintain the existing order from the query
+      });
       
       setTasks(typedTasks);
     } catch (error) {

@@ -1,3 +1,13 @@
+/**
+ * Simplified interface definitions for Supabase tables.
+ * 
+ * Note: These are simplified interfaces that may be easier to use in components.
+ * For complete type definitions with Insert/Update operations, use the 
+ * auto-generated types from src/types/supabase-generated.ts.
+ * 
+ * Important: Keep these interfaces in sync with the generated types!
+ */
+
 // Type definitions for Supabase tables
 
 export interface Habit {

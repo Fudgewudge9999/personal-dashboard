@@ -1,1 +1,33 @@
-project_id = "etyiermrikgzsnxvzzxq"
+# This file is used to configure your Supabase project.
+# It's very minimal at the moment and uses default values.
+# You can learn more here: https://supabase.com/docs/guides/getting-started/local-development
+
+project_id = "qlfpuscdxaiurwvexxua"
+
+[auth]
+enabled = true
+site_url = "http://localhost:8080"
+additional_redirect_urls = ["http://localhost:8080", "http://localhost:8080/auth/login", "http://localhost:8080/auth/callback", "http://localhost:8080/auth/verify", "http://localhost:8080/auth/update-password", "http://localhost:8080/auth/reset-password", "http://localhost:8080/"]
+jwt_expiry = 3600
+enable_refresh_token_rotation = true
+refresh_token_reuse_interval = 10
+
+[auth.email]
+enable_signup = true
+double_confirm_changes = true
+enable_confirmations = true
+secure_password_change = false
+max_frequency = "1m0s"
+otp_length = 6
+otp_expiry = 86400
+
+[auth.mfa]
+max_enrolled_factors = 10
+
+[auth.mfa.totp]
+enroll_enabled = true
+verify_enabled = true
+
+[auth.mfa.phone]
+enroll_enabled = false
+verify_enabled = false

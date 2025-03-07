@@ -7,7 +7,7 @@ import { CardContainer } from "../common/CardContainer";
 import { Input } from "../ui/input";
 import { Textarea } from "../ui/textarea";
 import { supabase } from "@/integrations/supabase/client";
-import { Database } from "@/integrations/supabase/types";
+import { Database } from "@/types/supabase-generated";
 import { Timer } from "../common/Timer";
 import { useTimerStore } from "@/store/useTimerStore";
 
@@ -50,9 +50,24 @@ export function FocusView() {
   const loadSessions = async () => {
     try {
       setIsLoadingSessions(true);
+      
+      // Get current user
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      if (userError) throw userError;
+      
+      if (!user) {
+        toast({
+          title: "Authentication Required",
+          description: "Please sign in to view your focus sessions.",
+          variant: "destructive",
+        });
+        return;
+      }
+
       const { data: sessions, error: sessionsError } = await supabase
         .from('focus_sessions')
         .select('*')
+        .eq('user_id', user.id)  // Filter by user_id
         .order('created_at', { ascending: false });
 
       if (sessionsError) throw sessionsError;
@@ -98,9 +113,24 @@ export function FocusView() {
   const loadTasks = async () => {
     try {
       setIsLoadingTasks(true);
+      
+      // Get current user
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      if (userError) throw userError;
+      
+      if (!user) {
+        toast({
+          title: "Authentication Required",
+          description: "Please sign in to view your focus tasks.",
+          variant: "destructive",
+        });
+        return;
+      }
+
       const { data, error } = await supabase
         .from('focus_tasks')
         .select('*')
+        .eq('user_id', user.id)  // Filter by user_id
         .order('created_at', { ascending: true });
 
       if (error) throw error;
@@ -120,9 +150,23 @@ export function FocusView() {
   const addTask = async () => {
     if (newTaskText.trim()) {
       try {
+        // Get current user
+        const { data: { user }, error: userError } = await supabase.auth.getUser();
+        if (userError) throw userError;
+        
+        if (!user) {
+          toast({
+            title: "Authentication Required",
+            description: "Please sign in to add tasks.",
+            variant: "destructive",
+          });
+          return;
+        }
+
         const newTask: FocusTaskInsert = {
           text: newTaskText.trim(),
-          completed: false
+          completed: false,
+          user_id: user.id  // Add user_id to the task
         };
 
         console.log('Attempting to add task:', newTask);
@@ -150,6 +194,7 @@ export function FocusView() {
         toast({
           title: "Error adding task",
           description: error.message || "There was a problem adding your task. Please try again.",
+          variant: "destructive",
         });
       }
     }
@@ -160,10 +205,27 @@ export function FocusView() {
       const task = currentTasks.find(t => t.id === taskId);
       if (!task) return;
 
+      // Get current user
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      if (userError) throw userError;
+      
+      if (!user) {
+        toast({
+          title: "Authentication Required",
+          description: "Please sign in to update tasks.",
+          variant: "destructive",
+        });
+        return;
+      }
+
       const { error } = await supabase
         .from('focus_tasks')
-        .update({ completed: !task.completed })
-        .eq('id', taskId);
+        .update({ 
+          completed: !task.completed,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', taskId)
+        .eq('user_id', user.id);  // Ensure user owns the task
 
       if (error) throw error;
 
@@ -175,25 +237,46 @@ export function FocusView() {
       toast({
         title: "Error updating task",
         description: "There was a problem updating your task. Please try again.",
+        variant: "destructive",
       });
     }
   };
 
   const removeTask = async (taskId: string) => {
     try {
+      // Get current user
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      if (userError) throw userError;
+      
+      if (!user) {
+        toast({
+          title: "Authentication Required",
+          description: "Please sign in to remove tasks.",
+          variant: "destructive",
+        });
+        return;
+      }
+
       const { error } = await supabase
         .from('focus_tasks')
         .delete()
-        .eq('id', taskId);
+        .eq('id', taskId)
+        .eq('user_id', user.id);  // Ensure user owns the task
 
       if (error) throw error;
 
       setCurrentTasks(prev => prev.filter(task => task.id !== taskId));
+      
+      toast({
+        title: "Task removed",
+        description: "Your focus task has been removed successfully.",
+      });
     } catch (error) {
       console.error('Error removing task:', error);
       toast({
         title: "Error removing task",
         description: "There was a problem removing your task. Please try again.",
+        variant: "destructive",
       });
     }
   };
@@ -240,49 +323,81 @@ export function FocusView() {
                   timerSessions.map((session) => (
                     <div 
                       key={session.id}
-                      className="p-3 rounded-md border border-border"
+                      className="p-3 rounded-md border border-border hover:bg-accent/50 transition-colors"
                     >
-                      <div className="flex justify-between items-center mb-2">
-                        <div>
-                          <div className="text-sm font-medium">
-                            {session.duration}m planned
-                            {session.actual_duration > 0 && (
-                              <span className="text-muted-foreground ml-2">
-                                ({session.actual_duration}m actual)
-                              </span>
-                            )}
+                      <div className="flex justify-between items-start gap-4">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2 mb-1">
+                            <div className="text-sm font-medium">
+                              {session.actual_duration}/{session.duration}m
+                            </div>
+                            <div className={cn(
+                              "text-xs px-2 py-0.5 rounded-full",
+                              session.completed 
+                                ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400" 
+                                : session.actual_duration >= session.duration
+                                  ? "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400"
+                                  : "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400"
+                            )}>
+                              {session.completed 
+                                ? "Completed" 
+                                : session.actual_duration >= session.duration
+                                  ? "Finished"
+                                  : "Interrupted"}
+                            </div>
                           </div>
+                          
+                          {/* Progress bar */}
+                          <div className="h-1.5 bg-secondary rounded-full mb-2">
+                            <div 
+                              className={cn(
+                                "h-full rounded-full transition-all",
+                                session.completed || session.actual_duration >= session.duration
+                                  ? "bg-green-500"
+                                  : "bg-amber-500"
+                              )}
+                              style={{ 
+                                width: `${Math.min(100, (session.actual_duration / session.duration) * 100)}%`
+                              }}
+                            />
+                          </div>
+
                           <div className="text-xs text-muted-foreground">
                             {formatDate(session.created_at)}
                           </div>
-                        </div>
-                        <div className={cn(
-                          "text-xs px-2 py-1 rounded-full",
-                          session.completed 
-                            ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400" 
-                            : "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400"
-                        )}>
-                          {session.completed ? "Completed" : "Started"}
+                          
+                          {session.tasks.length > 0 && (
+                            <div className="text-sm mt-2 space-y-1">
+                              <div className="font-medium text-xs text-muted-foreground">Tasks:</div>
+                              <div className="space-y-1">
+                                {session.tasks.map((task) => (
+                                  <div key={task.id} className="flex items-center gap-2">
+                                    <div className={cn(
+                                      "w-1.5 h-1.5 rounded-full",
+                                      task.completed ? "bg-green-500" : "bg-secondary"
+                                    )} />
+                                    <span className={cn(
+                                      "text-sm",
+                                      task.completed && "line-through text-muted-foreground"
+                                    )}>
+                                      {task.text}
+                                    </span>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                          
+                          {session.notes && (
+                            <div className="text-sm mt-2">
+                              <div className="font-medium text-xs text-muted-foreground">Notes:</div>
+                              <p className="text-sm text-muted-foreground whitespace-pre-wrap">
+                                {session.notes}
+                              </p>
+                            </div>
+                          )}
                         </div>
                       </div>
-                      
-                      {session.tasks.length > 0 && (
-                        <div className="text-sm mt-2">
-                          <span className="font-medium">Tasks:</span>
-                          {session.tasks.map((task, index) => (
-                            <span key={task.id} className="ml-2">
-                              {task.text}
-                              {index < session.tasks.length - 1 ? "," : ""}
-                            </span>
-                          ))}
-                        </div>
-                      )}
-                      
-                      {session.notes && (
-                        <div className="text-sm mt-1 text-muted-foreground">
-                          <span className="font-medium">Notes:</span> {session.notes}
-                        </div>
-                      )}
                     </div>
                   ))
                 ) : (

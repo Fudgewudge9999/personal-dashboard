@@ -7,7 +7,7 @@ import { Textarea } from "../ui/textarea";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import { Tables } from "@/integrations/supabase/types";
+import { Tables } from "@/types/supabase-generated";
 import { DragDropContext, Droppable, Draggable, DropResult, DroppableProvided, DraggableProvided } from "react-beautiful-dnd";
 
 // Define the Subgoal type based on the Database schema
@@ -52,32 +52,38 @@ export function GoalsView() {
   useEffect(() => {
     const checkSupabase = async () => {
       try {
-        console.log("Checking Supabase connection...");
-        // Try to connect to Supabase
-        const { data, error } = await supabase.from('goals').select('count');
-        console.log("Supabase connection check result:", { data, error });
+        console.log("Checking Supabase connection and auth...");
         
-        if (error) {
-          console.warn("Supabase connection error, using localStorage instead:", error);
+        // Try to get the current session
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+        console.log("Auth session check:", { 
+          hasSession: !!session, 
+          error: sessionError ? 'Error occurred' : 'No error',
+          userId: session?.user?.id
+        });
+        
+        if (!session || !session.user) {
+          console.warn("No active session found");
           setIsUsingLocalStorage(true);
-          // Load goals from localStorage
-          const storedGoals = localStorage.getItem('goals');
-          if (storedGoals) {
-            setGoals(JSON.parse(storedGoals));
-          }
-        } else {
-          console.log("Supabase connection successful, using database");
-          setIsUsingLocalStorage(false);
-          fetchGoals();
+          toast({
+            title: "Authentication Required",
+            description: "Please sign in to save goals to the database",
+            variant: "destructive",
+          });
+          return;
         }
+
+        console.log("User authenticated, using database");
+        setIsUsingLocalStorage(false);
+        fetchGoals();
       } catch (error) {
-        console.error("Error checking Supabase connection:", error);
+        console.error("Error checking auth status:", error);
         setIsUsingLocalStorage(true);
-        // Load goals from localStorage
-        const storedGoals = localStorage.getItem('goals');
-        if (storedGoals) {
-          setGoals(JSON.parse(storedGoals));
-        }
+        toast({
+          title: "Connection Error",
+          description: "Unable to connect to the database. Using local storage instead.",
+          variant: "destructive",
+        });
       } finally {
         setIsLoading(false);
       }
@@ -106,12 +112,26 @@ export function GoalsView() {
     try {
       setIsLoading(true);
       
+      // First verify authentication
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        console.warn("No authenticated user found during fetch");
+        setIsUsingLocalStorage(true);
+        return;
+      }
+      
       const { data, error } = await supabase
         .from('goals')
         .select('*')
+        .eq('user_id', user.id)
         .order('created_at', { ascending: false });
 
       if (error) {
+        if (error.code === 'PGRST301') {
+          // Invalid auth credentials
+          setIsUsingLocalStorage(true);
+          return;
+        }
         throw error;
       }
 
@@ -161,22 +181,35 @@ export function GoalsView() {
     }
 
     try {
-      const newGoal: Goal = {
-        id: isUsingLocalStorage ? `local-${Date.now()}` : '',
-        title: newGoalTitle,
-        description: newGoalDescription || null,
-        target_date: newGoalTargetDate || null,
-        completed: false,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      };
-
-      console.log("Adding goal, isUsingLocalStorage:", isUsingLocalStorage);
+      // First verify authentication
+      const { data: { user } } = await supabase.auth.getUser();
+      console.log("Current user:", user);
+      
+      if (!user) {
+        console.warn("No authenticated user found during add");
+        setIsUsingLocalStorage(true);
+        toast({
+          title: "Authentication Error",
+          description: "Please sign in to save goals to the database",
+          variant: "destructive",
+        });
+        return;
+      }
 
       if (isUsingLocalStorage) {
-        console.log("Using localStorage to add goal");
-        // Add goal to local state only
-        setGoals([newGoal, ...goals]);
+        const localGoal: Goal = {
+          id: `local-${Date.now()}`,
+          title: newGoalTitle,
+          description: newGoalDescription || null,
+          target_date: newGoalTargetDate || null,
+          completed: false,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          user_id: user.id
+        };
+
+        console.log("Using localStorage to add goal:", localGoal);
+        setGoals([localGoal, ...goals]);
         resetForm();
         setIsAddingGoal(false);
         
@@ -188,70 +221,59 @@ export function GoalsView() {
       }
 
       // Try to add to Supabase
-      console.log("Attempting to add goal to Supabase:", {
-        title: newGoal.title,
-        description: newGoal.description,
-        target_date: newGoal.target_date,
-        completed: newGoal.completed
-      });
-
-      const { data, error } = await supabase
-        .from('goals')
-        .insert([{
-          title: newGoal.title,
-          description: newGoal.description,
-          target_date: newGoal.target_date,
-          completed: newGoal.completed
-        }])
-        .select();
-
-      console.log("Supabase insert result:", { data, error });
-
-      if (error) {
-        console.error("Supabase error:", error);
-        // Fall back to local storage
-        setIsUsingLocalStorage(true);
-        newGoal.id = `local-${Date.now()}`;
-        setGoals([newGoal, ...goals]);
-        
-        toast({
-          title: "Database Error",
-          description: "Goal saved to local storage instead",
-          variant: "destructive",
-        });
-      } else if (data && data.length > 0) {
-        console.log("Successfully added goal to Supabase:", data[0]);
-        setGoals([data[0], ...goals]);
-        toast({
-          title: "Success",
-          description: "Goal added successfully",
-        });
-      }
+      console.log("Attempting to add goal to database...");
       
-      resetForm();
-      setIsAddingGoal(false);
-    } catch (error) {
-      console.error("Error adding goal:", error);
-      
-      // Fall back to local storage
-      const localGoal: Goal = {
-        id: `local-${Date.now()}`,
+      const goalData = {
         title: newGoalTitle,
         description: newGoalDescription || null,
         target_date: newGoalTargetDate || null,
         completed: false,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
+        user_id: user.id
       };
       
-      setGoals([localGoal, ...goals]);
-      setIsUsingLocalStorage(true);
-      resetForm();
-      setIsAddingGoal(false);
-      
+      console.log("Goal data to insert:", goalData);
+
+      const { data, error } = await supabase
+        .from('goals')
+        .insert([goalData])
+        .select()
+        .single();
+
+      console.log("Supabase response:", { data, error });
+
+      if (error) {
+        console.error("Database error details:", {
+          code: error.code,
+          msg: error.message,
+          details: error.details,
+          hint: error.hint
+        });
+
+        if (error.code === 'PGRST301' || error.code === '42501') {
+          toast({
+            title: "Permission Error",
+            description: "You don't have permission to add goals. Please check your login status.",
+            variant: "destructive",
+          });
+          setIsUsingLocalStorage(true);
+        } else {
+          throw error;
+        }
+      } else if (data) {
+        console.log("Successfully added goal:", data);
+        setGoals([data, ...goals]);
+        toast({
+          title: "Success",
+          description: "Goal added to database",
+        });
+        resetForm();
+        setIsAddingGoal(false);
+      }
+    } catch (error) {
+      console.error("Error adding goal:", error);
       toast({
         title: "Error",
-        description: "Saved to local storage instead",
+        description: "Failed to add goal. Please try again.",
         variant: "destructive",
       });
     }

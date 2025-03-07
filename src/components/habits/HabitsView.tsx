@@ -8,6 +8,7 @@ import { AddHabitForm } from "./AddHabitForm";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { Habit as HabitType } from "@/types/supabase";
+import { addUserIdToData } from "@/utils/supabase-utils";
 
 interface Habit {
   id: string;
@@ -288,18 +289,21 @@ export function HabitsView() {
     startDate: string;
   }) => {
     try {
+      // Prepare habit data with user ID
+      const habitWithUserId = await addUserIdToData({
+        name: habitData.name,
+        description: habitData.description || null,
+        target_days: habitData.targetDays,
+        start_date: habitData.startDate,
+        current_streak: 0,
+        completed_today: false,
+        last_completed_date: null
+      });
+      
       // Insert the new habit into Supabase
       const { data, error } = await supabase
         .from('habits')
-        .insert({
-          name: habitData.name,
-          description: habitData.description || null,
-          target_days: habitData.targetDays,
-          start_date: habitData.startDate,
-          current_streak: 0,
-          completed_today: false,
-          last_completed_date: null
-        })
+        .insert(habitWithUserId)
         .select();
       
       if (error) {
