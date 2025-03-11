@@ -14,6 +14,7 @@ import Resources from "./pages/Resources";
 import Analytics from "./pages/Analytics";
 import Focus from "./pages/Focus";
 import Goals from "./pages/Goals";
+import Notes from "./pages/Notes";
 import NotFound from "./pages/NotFound";
 import LoginPage from "./pages/auth/Login";
 import SignUpPage from "./pages/auth/SignUp";
@@ -21,6 +22,10 @@ import ResetPasswordPage from "./pages/auth/ResetPassword";
 import UpdatePasswordPage from "./pages/auth/UpdatePassword";
 import ProfilePage from "./pages/auth/Profile";
 import VerifyEmailPage from "./pages/auth/VerifyEmail";
+import EventDetails from "./pages/EventDetails";
+import EditEvent from "./pages/EditEvent";
+import NewNote from "./pages/NewNote";
+import NoteDetail from "./pages/NoteDetail";
 
 const queryClient = new QueryClient();
 
@@ -56,6 +61,22 @@ const App = () => (
               } 
             />
             <Route 
+              path="/calendar/event/:id" 
+              element={
+                <ProtectedRoute>
+                  <EventDetails />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/calendar/event/:id/edit" 
+              element={
+                <ProtectedRoute>
+                  <EditEvent />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
               path="/tasks" 
               element={
                 <ProtectedRoute>
@@ -84,6 +105,30 @@ const App = () => (
               element={
                 <ProtectedRoute>
                   <Resources />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/notes" 
+              element={
+                <ProtectedRoute>
+                  <Notes />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/notes/:id" 
+              element={
+                <ProtectedRoute>
+                  <NoteDetail />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/new-note" 
+              element={
+                <ProtectedRoute>
+                  <NewNote />
                 </ProtectedRoute>
               } 
             />

@@ -1,23 +1,4 @@
--- Drop any existing RLS settings first to ensure clean state
-DO $$
-BEGIN
-  -- Directly update the pg_class table to enable RLS
-  UPDATE pg_catalog.pg_class
-  SET relrowsecurity = TRUE
-  WHERE relnamespace = 'public'::regnamespace
-  AND relkind = 'r'
-  AND relname IN ('resources', 'categories', 'habits', 'events', 'goals');
-  
-  -- Make sure restrictions are enforced
-  UPDATE pg_catalog.pg_class
-  SET relforcerowsecurity = TRUE
-  WHERE relnamespace = 'public'::regnamespace
-  AND relkind = 'r'
-  AND relname IN ('resources', 'categories', 'habits', 'events', 'goals');
-END
-$$;
-
--- Also try the standard ALTER TABLE approach
+-- Use standard ALTER TABLE statements to enable RLS
 ALTER TABLE "public"."resources" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "public"."categories" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "public"."habits" ENABLE ROW LEVEL SECURITY;

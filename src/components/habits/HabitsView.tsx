@@ -74,19 +74,14 @@ export function HabitsView() {
           const yesterdayStr = yesterday.toISOString().split('T')[0];
           
           for (const habit of habitsData as any[]) {
-            // If the habit was completed yesterday, we want to keep the streak
-            // If it wasn't completed yesterday, we reset the streak
             let updateData: any = { completed_today: false };
             
-            // If the habit was completed yesterday (lastCompletedDate === yesterday),
-            // we don't need to update the streak as it was already incremented
-            // If it wasn't completed yesterday, reset the streak
             if (habit.completed_today) {
-              // If it was completed today, update the last_completed_date to today
-              // This preserves the streak when we reset for a new day
+              // If it was completed on the previous day, preserve that completion
+              // by setting last_completed_date to yesterday
               updateData = {
                 ...updateData,
-                last_completed_date: today
+                last_completed_date: yesterdayStr
               };
             } else if (habit.last_completed_date !== yesterdayStr) {
               // If it wasn't completed yesterday, reset the streak
@@ -105,21 +100,26 @@ export function HabitsView() {
               console.error('Error updating habit:', updateError);
             }
           }
+          
+          // Save today's date as the last reset date
+          localStorage.setItem('lastHabitResetDate', today);
+          
+          // Show a toast notification
+          toast.info('Habits have been reset for a new day');
         }
         
-        // Save today's date as the last reset date
-        localStorage.setItem('lastHabitResetDate', today);
-        
-        // Show a toast notification
-        toast.info('Habits have been reset for a new day');
+        // Fetch habits after potential reset
+        await fetchHabits();
+      } else {
+        // Even if we don't need to reset, still fetch habits
+        await fetchHabits();
       }
-      
-      // Fetch habits after potential reset
-      await fetchHabits();
     } catch (error) {
       console.error('Error checking/resetting habits:', error);
       // Still try to fetch habits even if reset failed
       fetchHabits();
+    } finally {
+      setIsLoading(false);
     }
   };
   
@@ -218,60 +218,72 @@ export function HabitsView() {
       
       // Get today's date in YYYY-MM-DD format
       const today = new Date().toISOString().split('T')[0];
+      const yesterday = new Date();
+      yesterday.setDate(yesterday.getDate() - 1);
+      const yesterdayStr = yesterday.toISOString().split('T')[0];
       
       // Optimistically update UI
-      setHabits(habits.map(habit => 
-        habit.id === habitId 
-          ? { ...habit, completedToday: !habit.completedToday } 
-          : habit
-      ));
+      setHabits(habits.map(habit => {
+        if (habit.id === habitId) {
+          if (habit.completedToday) {
+            // If unchecking, update completedToday and potentially decrease streak
+            return { 
+              ...habit, 
+              completedToday: false,
+              currentStreak: Math.max(0, habit.currentStreak - 1),
+              lastCompletedDate: null
+            };
+          } else {
+            // If checking, update completedToday and potentially currentStreak
+            const wasCompletedYesterday = habit.lastCompletedDate === yesterdayStr;
+            const newStreak = wasCompletedYesterday ? habit.currentStreak + 1 : 1;
+            
+            return { 
+              ...habit, 
+              completedToday: true,
+              currentStreak: newStreak,
+              lastCompletedDate: today
+            };
+          }
+        }
+        return habit;
+      }));
       
       if (habitToToggle.completedToday) {
-        // If we're unchecking a habit, just set completedToday to false
-        // but don't change the streak or lastCompletedDate
+        // If we're unchecking a habit
         const { error } = await supabase
           .from('habits')
-          .update({ completed_today: false })
+          .update({ 
+            completed_today: false,
+            current_streak: Math.max(0, habitToToggle.currentStreak - 1),
+            last_completed_date: null
+          })
           .eq('id', habitId);
         
         if (error) {
           throw error;
         }
         
-        toast.success(`Habit "${habitToToggle.name}" marked as incomplete`);
+        toast.success(`Habit "${habitToToggle.name}" marked as incomplete. Streak adjusted.`);
       } else {
-        // If we're checking a habit, we need to check if it was already completed today
-        // If lastCompletedDate is today, we've already counted this in the streak
-        // so we just mark it as completed without incrementing the streak
-        if (habitToToggle.lastCompletedDate === today) {
-          const { error } = await supabase
-            .from('habits')
-            .update({ completed_today: true })
-            .eq('id', habitId);
-          
-          if (error) {
-            throw error;
-          }
-          
-          toast.success(`Habit "${habitToToggle.name}" marked as complete`);
-        } else {
-          // If lastCompletedDate is not today, this is the first completion for today
-          // so we increment the streak and update lastCompletedDate
-          const { error } = await supabase
-            .from('habits')
-            .update({ 
-              completed_today: true,
-              current_streak: habitToToggle.currentStreak + 1,
-              last_completed_date: today
-            })
-            .eq('id', habitId);
-          
-          if (error) {
-            throw error;
-          }
-          
-          toast.success(`Habit "${habitToToggle.name}" completed! Streak: ${habitToToggle.currentStreak + 1} days`);
+        // We're checking a habit
+        const wasCompletedYesterday = habitToToggle.lastCompletedDate === yesterdayStr;
+        const newStreak = wasCompletedYesterday ? habitToToggle.currentStreak + 1 : 1;
+        
+        const { error } = await supabase
+          .from('habits')
+          .update({ 
+            completed_today: true,
+            current_streak: newStreak,
+            last_completed_date: today
+          })
+          .eq('id', habitId);
+        
+        if (error) {
+          throw error;
         }
+        
+        toast.success(`Habit "${habitToToggle.name}" completed! Streak: ${newStreak} days`);
       }
     } catch (error) {
       console.error('Error updating habit:', error);
@@ -548,7 +560,7 @@ export function HabitsView() {
                 </div>
                 
                 <div className="pt-2 text-xs text-muted-foreground">
-                  Started: {new Date(habit.startDate).toLocaleDateString()}
+                  Started: {new Date(habit.startDate).toLocaleDateString('en-GB')}
                 </div>
               </div>
             </CardContainer>

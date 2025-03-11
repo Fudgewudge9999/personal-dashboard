@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { AppButton } from "../common/AppButton";
 import { Calendar } from "@/components/ui/calendar";
 import { cn } from "@/lib/utils";
@@ -6,7 +6,7 @@ import { format } from "date-fns";
 import { CalendarIcon } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
-interface AddTaskFormProps {
+interface TaskFormProps {
   onSubmit: (task: {
     title: string;
     description?: string;
@@ -14,15 +14,35 @@ interface AddTaskFormProps {
     priority: "high" | "medium" | "low";
   }) => void;
   onCancel: () => void;
+  initialData?: {
+    title: string;
+    description?: string;
+    due_date?: string;
+    priority: "high" | "medium" | "low";
+  };
+  mode?: 'add' | 'edit';
 }
 
-export function AddTaskForm({ onSubmit, onCancel }: AddTaskFormProps) {
-  const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
-  const [dueDate, setDueDate] = useState<Date | undefined>(undefined);
-  const [priority, setPriority] = useState<"high" | "medium" | "low">("medium");
+export function TaskForm({ onSubmit, onCancel, initialData, mode = 'add' }: TaskFormProps) {
+  const [title, setTitle] = useState(initialData?.title || "");
+  const [description, setDescription] = useState(initialData?.description || "");
+  const [dueDate, setDueDate] = useState<Date>(
+    initialData?.due_date ? new Date(initialData.due_date) : new Date()
+  );
+  const [priority, setPriority] = useState<"high" | "medium" | "low">(
+    initialData?.priority || "medium"
+  );
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
+
+  useEffect(() => {
+    if (initialData) {
+      setTitle(initialData.title);
+      setDescription(initialData.description || "");
+      setDueDate(initialData.due_date ? new Date(initialData.due_date) : new Date());
+      setPriority(initialData.priority);
+    }
+  }, [initialData]);
   
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -33,7 +53,7 @@ export function AddTaskForm({ onSubmit, onCancel }: AddTaskFormProps) {
     onSubmit({
       title,
       description: description.trim() || undefined,
-      dueDate: dueDate ? dueDate.toISOString() : undefined,
+      dueDate: dueDate.toISOString(),
       priority,
     });
   };
@@ -70,7 +90,7 @@ export function AddTaskForm({ onSubmit, onCancel }: AddTaskFormProps) {
       </div>
       
       <div className="space-y-2">
-        <label className="text-sm font-medium">Due Date (Optional)</label>
+        <label className="text-sm font-medium">Due Date</label>
         <Popover open={isDatePickerOpen} onOpenChange={setIsDatePickerOpen}>
           <PopoverTrigger asChild>
             <button
@@ -81,7 +101,7 @@ export function AddTaskForm({ onSubmit, onCancel }: AddTaskFormProps) {
               )}
             >
               <CalendarIcon className="mr-2 h-4 w-4" />
-              {dueDate ? format(dueDate, "PPP") : <span>Pick a date</span>}
+              {format(dueDate, "PPP")}
             </button>
           </PopoverTrigger>
           <PopoverContent className="w-auto p-0" align="start">
@@ -89,7 +109,7 @@ export function AddTaskForm({ onSubmit, onCancel }: AddTaskFormProps) {
               mode="single"
               selected={dueDate}
               onSelect={(selected) => {
-                setDueDate(selected);
+                setDueDate(selected || new Date());
                 setIsDatePickerOpen(false);
               }}
               initialFocus
@@ -137,7 +157,7 @@ export function AddTaskForm({ onSubmit, onCancel }: AddTaskFormProps) {
           Cancel
         </AppButton>
         <AppButton type="submit" disabled={!title.trim() || isSubmitting}>
-          {isSubmitting ? "Adding..." : "Add Task"}
+          {isSubmitting ? `${mode === 'add' ? 'Adding' : 'Saving'}...` : mode === 'add' ? 'Add Task' : 'Save Changes'}
         </AppButton>
       </div>
     </form>

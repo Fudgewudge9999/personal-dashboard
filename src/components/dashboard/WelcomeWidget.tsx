@@ -5,7 +5,7 @@ import { PlusCircle } from "lucide-react";
 import { Badge } from "../common/Badge";
 import { useState } from "react";
 import { Modal } from "../common/Modal";
-import { AddTaskForm } from "../tasks/AddTaskForm";
+import { TaskForm } from "../tasks/TaskForm";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
@@ -26,7 +26,7 @@ export function WelcomeWidget({ className, onTaskAdded }: WelcomeWidgetProps) {
     month: 'long', 
     day: 'numeric' 
   };
-  const formattedDate = today.toLocaleDateString('en-US', options);
+  const formattedDate = today.toLocaleDateString('en-GB', options);
   
   const getRandomQuote = () => {
     const quotes = [
@@ -129,7 +129,8 @@ export function WelcomeWidget({ className, onTaskAdded }: WelcomeWidgetProps) {
         onClose={() => setIsAddTaskModalOpen(false)}
         title="Add New Task"
       >
-        <AddTaskForm
+        <TaskForm
+          mode="add"
           onSubmit={handleAddTask}
           onCancel={() => setIsAddTaskModalOpen(false)}
         />

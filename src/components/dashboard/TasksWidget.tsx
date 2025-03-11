@@ -16,6 +16,7 @@ interface TaskProps {
   status: "pending" | "completed";
   priority: "high" | "medium" | "low";
   due_date?: string;
+  completed_at?: string | null;
 }
 
 function Task({ id, title, status, priority }: TaskProps) {
@@ -25,11 +26,18 @@ function Task({ id, title, status, priority }: TaskProps) {
   const toggleTask = async () => {
     setIsUpdating(true);
     const newStatus = isCompleted ? "pending" : "completed";
+    const now = new Date().toISOString();
     
     try {
+      const updateData = {
+        status: newStatus,
+        // Set completed_at to current timestamp when completing, or null when marking as pending
+        completed_at: newStatus === 'completed' ? now : null
+      };
+      
       const { error } = await supabase
         .from('tasks')
-        .update({ status: newStatus })
+        .update(updateData)
         .eq('id', id);
         
       if (error) throw error;
@@ -84,19 +92,22 @@ export function TasksWidget({ className, refreshTrigger }: TasksWidgetProps) {
   const fetchTodaysTasks = async () => {
     setIsLoading(true);
     try {
-      // Get today's date in ISO format (YYYY-MM-DD)
+      // Get today's date bounds for comparison
       const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      const todayStr = today.toISOString().split('T')[0];
+      const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate()).toISOString();
+      const endOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1).toISOString();
       
-      // Query tasks due today
+      // Query tasks due today using a range query
       const { data, error } = await supabase
         .from('tasks')
         .select('*')
-        .eq('due_date', todayStr)
+        .gte('due_date', startOfDay)
+        .lt('due_date', endOfDay)
         .order('created_at', { ascending: false });
         
       if (error) throw error;
+      
+      console.log('Today\'s tasks fetched:', data?.length || 0);
       
       // Cast the data to the correct type
       const typedTasks = (data?.map(task => ({
@@ -104,7 +115,8 @@ export function TasksWidget({ className, refreshTrigger }: TasksWidgetProps) {
         title: task.title,
         status: task.status as "pending" | "completed",
         priority: task.priority as "high" | "medium" | "low",
-        due_date: task.due_date
+        due_date: task.due_date,
+        completed_at: task.completed_at
       })) || []).sort((a, b) => {
         // First sort by completion status
         if (a.status === 'completed' && b.status === 'pending') return 1;
@@ -124,28 +136,33 @@ export function TasksWidget({ className, refreshTrigger }: TasksWidgetProps) {
 
   return (
     <CardContainer className={cn("h-full", className)}>
-      <div className="space-y-4">
-        <div className="flex items-center justify-between mb-2">
+      <div className="flex flex-col h-full">
+        <div className="flex items-center justify-between mb-4">
           <h3 className="font-medium text-lg">Today's Tasks</h3>
           <a href="/tasks" className="text-sm text-primary/80 hover:text-primary transition-colors">View All</a>
         </div>
         
-        <div className="animate-fade-in">
+        <div className="flex-1 overflow-hidden animate-fade-in">
           {isLoading ? (
             <div className="p-4 text-center text-muted-foreground">Loading tasks...</div>
           ) : tasks.length === 0 ? (
             <div className="p-4 text-center text-muted-foreground">No tasks due today</div>
           ) : (
-            tasks.map((task) => (
-              <Task 
-                key={task.id} 
-                id={task.id} 
-                title={task.title} 
-                status={task.status} 
-                priority={task.priority} 
-              />
-            ))
+            <div className="overflow-y-auto max-h-[250px] custom-scrollbar">
+              {tasks.map((task) => (
+                <Task 
+                  key={task.id} 
+                  id={task.id} 
+                  title={task.title} 
+                  status={task.status} 
+                  priority={task.priority} 
+                />
+              ))}
+            </div>
           )}
+        </div>
+        <div className="text-xs text-muted-foreground mt-2">
+          {tasks.length > 0 && `Showing ${tasks.length} task${tasks.length !== 1 ? 's' : ''}`}
         </div>
       </div>
     </CardContainer>

@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { format, addDays, startOfWeek, endOfWeek, isSameDay, isWithinInterval, parseISO, startOfDay, addHours, isSameWeek } from "date-fns";
 import { addUserIdToData } from "@/utils/supabase-utils";
+import { useNavigate } from "react-router-dom";
 
 // Interface for our local calendar events
 interface CalendarEvent {
@@ -35,10 +36,13 @@ interface SupabaseEvent {
 type ViewMode = "month" | "week" | "day";
 
 export function CalendarView() {
+  const navigate = useNavigate();
   const [currentDate, setCurrentDate] = useState(new Date());
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [isAddEventModalOpen, setIsAddEventModalOpen] = useState(false);
   const [isEditEventModalOpen, setIsEditEventModalOpen] = useState(false);
+  const [isViewEventModalOpen, setIsViewEventModalOpen] = useState(false);
+  const [editedDescription, setEditedDescription] = useState("");
   const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [viewMode, setViewMode] = useState<ViewMode>("month");
@@ -177,12 +181,16 @@ export function CalendarView() {
     const month = currentDate.getMonth();
     const dateString = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
     
-    return events.filter(event => event.date === dateString);
+    return events
+      .filter(event => event.date === dateString)
+      .sort((a, b) => a.startTime.localeCompare(b.startTime));
   };
   
   const getEventsForDate = (date: Date) => {
     const dateString = format(date, 'yyyy-MM-dd');
-    return events.filter(event => event.date === dateString);
+    return events
+      .filter(event => event.date === dateString)
+      .sort((a, b) => a.startTime.localeCompare(b.startTime));
   };
 
   const getCategoryColor = (category: "tutoring" | "work" | "personal") => {
@@ -233,8 +241,9 @@ export function CalendarView() {
                 {dayEvents.slice(0, 2).map(event => (
                   <div 
                     key={event.id} 
-                    className={`text-xs p-1 rounded truncate ${getCategoryColor(event.category)}`}
+                    className={`text-xs p-1 rounded truncate ${getCategoryColor(event.category)} cursor-pointer hover:opacity-80`}
                     title={`${event.title} (${event.startTime} - ${event.endTime})`}
+                    onClick={() => handleEventClick(event)}
                   >
                     {event.startTime.substring(0, 5)} - {event.title}
                   </div>
@@ -247,8 +256,9 @@ export function CalendarView() {
               dayEvents.map(event => (
                 <div 
                   key={event.id} 
-                  className={`text-xs p-1 rounded truncate ${getCategoryColor(event.category)}`}
+                  className={`text-xs p-1 rounded truncate ${getCategoryColor(event.category)} cursor-pointer hover:opacity-80`}
                   title={`${event.title} (${event.startTime} - ${event.endTime})`}
+                  onClick={() => handleEventClick(event)}
                 >
                   {event.startTime.substring(0, 5)} - {event.title}
                 </div>
@@ -288,10 +298,11 @@ export function CalendarView() {
             {dayEvents.map(event => (
               <div 
                 key={event.id} 
-                className={`text-xs p-2 rounded-md ${getCategoryColor(event.category)} group relative`}
+                className={`text-xs p-2 rounded-md ${getCategoryColor(event.category)} mb-1 group relative cursor-pointer hover:opacity-80`}
+                onClick={() => handleEventClick(event)}
               >
                 <div className="font-medium">{event.title}</div>
-                <div>{event.startTime} - {event.endTime}</div>
+                <div className="text-xs">{event.startTime} - {event.endTime}</div>
                 <div className="absolute right-2 top-2 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
                   <button
                     onClick={(e) => {
@@ -342,13 +353,65 @@ export function CalendarView() {
     const dayEvents = getEventsForDate(currentDate);
     const currentHour = new Date().getHours();
     
+    // Helper function to convert time string to minutes since midnight
+    const timeToMinutes = (timeStr: string) => {
+      const [hours, minutes] = timeStr.split(':').map(Number);
+      return hours * 60 + minutes;
+    };
+
+    // Calculate event positions and dimensions
+    const eventElements = dayEvents.map(event => {
+      const startMinutes = timeToMinutes(event.startTime);
+      const endMinutes = timeToMinutes(event.endTime);
+      const duration = endMinutes - startMinutes;
+      
+      // Calculate position and height
+      const top = (startMinutes / 60) * 60; // Each hour is 60px
+      const height = (duration / 60) * 60;
+      
+      return (
+        <div 
+          key={event.id} 
+          className={`absolute left-0 right-0 mx-2 p-2 rounded-md ${getCategoryColor(event.category)} group cursor-pointer hover:opacity-80 overflow-hidden`}
+          style={{
+            top: `${top}px`,
+            height: `${height}px`,
+            minHeight: '20px', // Ensure very short events are still visible
+          }}
+          onClick={() => handleEventClick(event)}
+        >
+          <div className="font-medium truncate">{event.title}</div>
+          <div className="text-xs">{event.startTime} - {event.endTime}</div>
+          <div className="absolute right-2 top-2 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                handleEditEvent(event);
+              }}
+              className="p-1 hover:bg-black/10 rounded"
+              title="Edit event"
+            >
+              <Pencil size={14} />
+            </button>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                handleDeleteEvent(event.id);
+              }}
+              className="p-1 hover:bg-black/10 rounded text-red-600"
+              title="Delete event"
+            >
+              <Trash size={14} />
+            </button>
+          </div>
+        </div>
+      );
+    });
+    
+    // Render the time grid
     for (let hour = 0; hour < 24; hour++) {
       const hourTime = addHours(startOfDay(currentDate), hour);
       const hourFormatted = format(hourTime, 'h a');
-      const hourEvents = dayEvents.filter(event => {
-        const eventStartHour = parseInt(event.startTime.split(':')[0]);
-        return eventStartHour === hour;
-      });
       const isCurrentHour = isSameDay(currentDate, new Date()) && hour === currentHour;
 
       hours.push(
@@ -356,44 +419,23 @@ export function CalendarView() {
           <div className="w-20 p-2 text-right text-sm border-r flex-shrink-0">
             {hourFormatted}
           </div>
-          <div className="flex-grow p-2 relative">
-            {hourEvents.map(event => (
-              <div 
-                key={event.id} 
-                className={`p-2 rounded-md ${getCategoryColor(event.category)} mb-1 group relative`}
-              >
-                <div className="font-medium">{event.title}</div>
-                <div className="text-xs">{event.startTime} - {event.endTime}</div>
-                <div className="absolute right-2 top-2 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleEditEvent(event);
-                    }}
-                    className="p-1 hover:bg-black/10 rounded"
-                    title="Edit event"
-                  >
-                    <Pencil size={14} />
-                  </button>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleDeleteEvent(event.id);
-                    }}
-                    className="p-1 hover:bg-black/10 rounded text-red-600"
-                    title="Delete event"
-                  >
-                    <Trash size={14} />
-                  </button>
-                </div>
-              </div>
-            ))}
+          <div className="flex-grow relative">
+            {/* Render half-hour marker */}
+            <div className="absolute left-0 right-0 top-[30px] border-t border-gray-100"></div>
           </div>
         </div>
       );
     }
 
-    return hours;
+    return (
+      <div className="relative">
+        {hours}
+        {/* Overlay events on top of the time grid */}
+        <div className="absolute inset-0 ml-20">
+          {eventElements}
+        </div>
+      </div>
+    );
   };
   
   const monthNames = [
@@ -493,6 +535,56 @@ export function CalendarView() {
       console.error('Error updating event:', error);
       toast.error('Failed to update event');
     }
+  };
+
+  const handleEventClick = (event: CalendarEvent) => {
+    navigate(`/calendar/event/${event.id}`);
+  };
+
+  const handleUpdateDescription = async () => {
+    if (!selectedEvent) return;
+
+    try {
+      const { error } = await supabase
+        .from('events')
+        .update({
+          description: editedDescription || null
+        })
+        .eq('id', selectedEvent.id);
+
+      if (error) {
+        throw error;
+      }
+
+      // Update the local events state
+      setEvents(events.map(event => 
+        event.id === selectedEvent.id
+          ? {
+              ...event,
+              description: editedDescription
+            }
+          : event
+      ));
+
+      toast.success('Description updated successfully');
+    } catch (error) {
+      console.error('Error updating description:', error);
+      toast.error('Failed to update description');
+    }
+  };
+
+  const handleEditFromView = () => {
+    setIsViewEventModalOpen(false);
+    setIsEditEventModalOpen(true);
+  };
+
+  // Format time for display
+  const formatTimeDisplay = (time: string) => {
+    const [hours, minutes] = time.split(':');
+    const hour = parseInt(hours, 10);
+    const ampm = hour >= 12 ? 'PM' : 'AM';
+    const displayHour = hour % 12 || 12;
+    return `${displayHour}:${minutes} ${ampm}`;
   };
 
   return (
@@ -635,6 +727,60 @@ export function CalendarView() {
               category: selectedEvent.category
             }}
           />
+        )}
+      </Modal>
+
+      <Modal
+        isOpen={isViewEventModalOpen}
+        onClose={() => {
+          setIsViewEventModalOpen(false);
+          setSelectedEvent(null);
+        }}
+        title="Event Description"
+      >
+        {selectedEvent && (
+          <div className="space-y-8 max-w-[90vw] w-full mx-auto px-12 min-h-[80vh] py-8 flex flex-col">
+            <div className="space-y-4">
+              <h3 className="text-3xl font-medium text-center">{selectedEvent.title}</h3>
+              <div className="text-center">
+                <p className="text-lg text-gray-600">
+                  {format(new Date(selectedEvent.date), 'PPPP')}
+                </p>
+                <p className="text-lg text-gray-600">
+                  {formatTimeDisplay(selectedEvent.startTime)} - {formatTimeDisplay(selectedEvent.endTime)}
+                </p>
+                <div className={`inline-block px-4 py-1.5 rounded-full text-base mt-3 ${getCategoryColor(selectedEvent.category)}`}>
+                  {selectedEvent.category.charAt(0).toUpperCase() + selectedEvent.category.slice(1)}
+                </div>
+              </div>
+            </div>
+            
+            <div className="space-y-4 flex-grow flex flex-col">
+              <label htmlFor="event-description" className="text-base font-medium">
+                Description (Optional)
+              </label>
+              <textarea
+                id="event-description"
+                value={editedDescription}
+                onChange={(e) => setEditedDescription(e.target.value)}
+                placeholder="Add details about this event"
+                className="w-full p-4 border rounded-md focus:outline-none focus:ring-2 focus:ring-ring text-base flex-grow"
+              />
+            </div>
+            
+            <div className="flex justify-center">
+              <AppButton 
+                onClick={() => {
+                  handleUpdateDescription();
+                  setIsViewEventModalOpen(false);
+                  setSelectedEvent(null);
+                }}
+                className="bg-gray-900 hover:bg-gray-800 text-white px-12 py-3 text-lg"
+              >
+                Update
+              </AppButton>
+            </div>
+          </div>
         )}
       </Modal>
     </div>

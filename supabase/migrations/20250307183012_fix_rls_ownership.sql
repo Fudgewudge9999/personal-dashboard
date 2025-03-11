@@ -106,7 +106,7 @@ CREATE POLICY "Enable update for users own goals" ON "public"."goals"
 CREATE POLICY "Enable delete for users own goals" ON "public"."goals"
     FOR DELETE USING (auth.uid() = user_id);
 
--- Create a function to ensure user_id is set to current user if not provided
+-- Create or replace the set_user_id function
 CREATE OR REPLACE FUNCTION public.set_user_id()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -118,22 +118,66 @@ END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- Create triggers to automatically set user_id if not provided
-CREATE TRIGGER set_resources_user_id
-  BEFORE INSERT ON "public"."resources"
-  FOR EACH ROW
-  EXECUTE FUNCTION public.set_user_id();
-
-CREATE TRIGGER set_categories_user_id
-  BEFORE INSERT ON "public"."categories"
-  FOR EACH ROW
-  EXECUTE FUNCTION public.set_user_id();
-
-CREATE TRIGGER set_habits_user_id
-  BEFORE INSERT ON "public"."habits"
-  FOR EACH ROW
-  EXECUTE FUNCTION public.set_user_id();
-
-CREATE TRIGGER set_events_user_id
-  BEFORE INSERT ON "public"."events"
-  FOR EACH ROW
-  EXECUTE FUNCTION public.set_user_id();
+DO $$
+BEGIN
+  -- Resources trigger
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_trigger
+    JOIN pg_class ON pg_trigger.tgrelid = pg_class.oid
+    JOIN pg_namespace ON pg_class.relnamespace = pg_namespace.oid
+    WHERE pg_trigger.tgname = 'set_resources_user_id'
+    AND pg_class.relname = 'resources'
+    AND pg_namespace.nspname = 'public'
+  ) THEN
+    CREATE TRIGGER set_resources_user_id
+      BEFORE INSERT ON "public"."resources"
+      FOR EACH ROW
+      EXECUTE FUNCTION public.set_user_id();
+  END IF;
+  
+  -- Categories trigger
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_trigger
+    JOIN pg_class ON pg_trigger.tgrelid = pg_class.oid
+    JOIN pg_namespace ON pg_class.relnamespace = pg_namespace.oid
+    WHERE pg_trigger.tgname = 'set_categories_user_id'
+    AND pg_class.relname = 'categories'
+    AND pg_namespace.nspname = 'public'
+  ) THEN
+    CREATE TRIGGER set_categories_user_id
+      BEFORE INSERT ON "public"."categories"
+      FOR EACH ROW
+      EXECUTE FUNCTION public.set_user_id();
+  END IF;
+  
+  -- Habits trigger
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_trigger
+    JOIN pg_class ON pg_trigger.tgrelid = pg_class.oid
+    JOIN pg_namespace ON pg_class.relnamespace = pg_namespace.oid
+    WHERE pg_trigger.tgname = 'set_habits_user_id'
+    AND pg_class.relname = 'habits'
+    AND pg_namespace.nspname = 'public'
+  ) THEN
+    CREATE TRIGGER set_habits_user_id
+      BEFORE INSERT ON "public"."habits"
+      FOR EACH ROW
+      EXECUTE FUNCTION public.set_user_id();
+  END IF;
+  
+  -- Events trigger
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_trigger
+    JOIN pg_class ON pg_trigger.tgrelid = pg_class.oid
+    JOIN pg_namespace ON pg_class.relnamespace = pg_namespace.oid
+    WHERE pg_trigger.tgname = 'set_events_user_id'
+    AND pg_class.relname = 'events'
+    AND pg_namespace.nspname = 'public'
+  ) THEN
+    CREATE TRIGGER set_events_user_id
+      BEFORE INSERT ON "public"."events"
+      FOR EACH ROW
+      EXECUTE FUNCTION public.set_user_id();
+  END IF;
+END
+$$;

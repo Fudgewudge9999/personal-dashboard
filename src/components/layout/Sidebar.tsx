@@ -16,6 +16,7 @@ import {
   Repeat,
   LogIn,
   User,
+  FileText,
 } from "lucide-react";
 
 interface SidebarLinkProps {
@@ -68,6 +69,7 @@ export function Sidebar() {
     { to: "/habits", icon: Repeat, label: "Habits" },
     { to: "/goals", icon: Target, label: "Goals" },
     { to: "/resources", icon: BookOpen, label: "Resources" },
+    { to: "/notes", icon: FileText, label: "Notes" },
     { to: "/analytics", icon: BarChart3, label: "Analytics" },
   ];
 

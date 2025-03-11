@@ -1,12 +1,13 @@
 import { CardContainer } from "../common/CardContainer";
 import { AppButton } from "../common/AppButton";
-import { Plus, Search, FolderOpen, Bookmark, File, ExternalLink, FolderPlus, X, Folder, Link, MoreVertical, Edit, Trash2 } from "lucide-react";
+import { Plus, Search, FolderOpen, Bookmark, File, ExternalLink, FolderPlus, X, Folder, Link, MoreVertical, Edit, Trash2, Pencil } from "lucide-react";
 import { Badge } from "../common/Badge";
 import { useState, useEffect } from "react";
 import { Modal } from "../common/Modal";
 import { AddResourceForm } from "./AddResourceForm";
 import { EditResourceForm } from "./EditResourceForm";
 import { AddCategoryForm } from "./AddCategoryForm";
+import { EditCategoryForm } from "./EditCategoryForm";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { addUserIdToData } from "@/utils/supabase-utils";
@@ -44,6 +45,9 @@ export function ResourcesView() {
   const [editingResource, setEditingResource] = useState<Resource | null>(null);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showActionsFor, setShowActionsFor] = useState<string | null>(null);
+  const [editingCategory, setEditingCategory] = useState<Category | null>(null);
+  const [isEditCategoryModalOpen, setIsEditCategoryModalOpen] = useState(false);
+  const [showCategoryActionsFor, setShowCategoryActionsFor] = useState<string | null>(null);
   
   useEffect(() => {
     fetchCategories();
@@ -337,6 +341,29 @@ export function ResourcesView() {
     }
   };
 
+  const handleEditCategory = async (categoryId: string, newName: string) => {
+    try {
+      // Update in Supabase
+      const { error } = await supabase
+        .from('categories')
+        .update({ name: newName })
+        .eq('id', categoryId);
+        
+      if (error) throw error;
+      
+      // Update local state
+      setCategories(categories.map(cat => 
+        cat.id === categoryId ? { ...cat, name: newName } : cat
+      ));
+      
+      setIsEditCategoryModalOpen(false);
+      toast.success("Category updated successfully");
+    } catch (error) {
+      console.error('Error updating category:', error);
+      toast.error('Failed to update category');
+    }
+  };
+
   return (
     <div className="container mx-auto p-4 max-w-7xl">
       <h1 className="text-2xl font-bold mb-6">Resources</h1>
@@ -365,18 +392,71 @@ export function ResourcesView() {
                 All Resources
               </button>
               {categories.map((category) => (
-                <button
+                <div
                   key={category.id}
-                  className={`w-full text-left px-3 py-2 rounded-md transition-colors flex justify-between items-center ${
+                  className={`group flex items-center justify-between px-3 py-2 rounded-md transition-colors ${
                     selectedCategory === category.id ? "bg-primary/10 text-primary" : "hover:bg-gray-100"
                   }`}
-                  onClick={() => setSelectedCategory(category.id)}
                 >
-                  <span>{category.name}</span>
-                  <span className="text-xs text-muted-foreground bg-gray-100 px-2 py-1 rounded-full">
-                    {category.count}
-                  </span>
-                </button>
+                  <button
+                    className="flex-1 text-left flex items-center justify-between"
+                    onClick={() => setSelectedCategory(category.id)}
+                  >
+                    <span>{category.name}</span>
+                    <span className="text-xs text-muted-foreground bg-gray-100 px-2 py-1 rounded-full">
+                      {category.count}
+                    </span>
+                  </button>
+                  <div className="relative ml-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setShowCategoryActionsFor(showCategoryActionsFor === category.id ? null : category.id);
+                      }}
+                      className="p-1 hover:bg-gray-100 rounded-full"
+                    >
+                      <MoreVertical size={14} />
+                    </button>
+                    
+                    {showCategoryActionsFor === category.id && (
+                      <div className="absolute right-0 mt-1 w-36 bg-white rounded-md shadow-lg z-10 border">
+                        <div className="py-1">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setEditingCategory(category);
+                              setIsEditCategoryModalOpen(true);
+                              setShowCategoryActionsFor(null);
+                            }}
+                            className="flex items-center w-full px-3 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                          >
+                            <Edit size={14} className="mr-2" />
+                            Edit
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (category.count > 0) {
+                                toast.error("Cannot delete category with resources. Remove resources first.");
+                                setShowCategoryActionsFor(null);
+                                return;
+                              }
+                              
+                              if (confirm('Are you sure you want to delete this category?')) {
+                                handleDeleteCategory(category.id);
+                              }
+                              setShowCategoryActionsFor(null);
+                            }}
+                            className="flex items-center w-full px-3 py-2 text-sm text-red-600 hover:bg-gray-100"
+                          >
+                            <Trash2 size={14} className="mr-2" />
+                            Delete
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
               ))}
             </div>
             
@@ -464,7 +544,7 @@ export function ResourcesView() {
                       )}
                       <div className="flex items-center mt-2 text-xs text-muted-foreground">
                         <span>
-                          {new Date(resource.created_at).toLocaleDateString()}
+                          {new Date(resource.created_at).toLocaleDateString('en-GB')}
                         </span>
                         {resource.file_size && (
                           <>
@@ -566,6 +646,22 @@ export function ResourcesView() {
             categories={categories}
             onSubmit={handleUpdateResource}
             onCancel={() => setShowEditModal(false)}
+          />
+        )}
+      </Modal>
+      
+      <Modal
+        isOpen={isEditCategoryModalOpen}
+        onClose={() => setIsEditCategoryModalOpen(false)}
+        title="Edit Category"
+        className="max-w-md mx-auto"
+      >
+        {editingCategory && (
+          <EditCategoryForm
+            categoryId={editingCategory.id}
+            initialName={editingCategory.name}
+            onSubmit={handleEditCategory}
+            onCancel={() => setIsEditCategoryModalOpen(false)}
           />
         )}
       </Modal>

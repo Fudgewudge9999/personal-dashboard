@@ -238,6 +238,7 @@ export function AddEventForm({ onSubmit, onCancel, initialData }: AddEventFormPr
           onChange={(e) => setDescription(e.target.value)}
           placeholder="Add details about this event"
           className="w-full p-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-ring"
+          spellCheck="false"
           rows={3}
         />
       </div>

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { CardContainer } from "../common/CardContainer";
 import { AppButton } from "../common/AppButton";
 import { Plus, Edit, Trash2, CheckCircle2, Circle, Target, Database, HardDrive, ChevronDown, ChevronRight, GripVertical } from "lucide-react";
@@ -70,11 +70,14 @@ export function GoalsView() {
             description: "Please sign in to save goals to the database",
             variant: "destructive",
           });
+          // Only set loading to false here since we won't be fetching goals
+          setIsLoading(false);
           return;
         }
 
         console.log("User authenticated, using database");
         setIsUsingLocalStorage(false);
+        // Don't set loading to false here - fetchGoals will handle that
         fetchGoals();
       } catch (error) {
         console.error("Error checking auth status:", error);
@@ -84,9 +87,10 @@ export function GoalsView() {
           description: "Unable to connect to the database. Using local storage instead.",
           variant: "destructive",
         });
-      } finally {
+        // Set loading to false since we won't be fetching goals
         setIsLoading(false);
       }
+      // Remove the finally block as loading state is now handled elsewhere
     };
     
     checkSupabase();
@@ -96,6 +100,18 @@ export function GoalsView() {
   useEffect(() => {
     if (!isUsingLocalStorage) {
       fetchGoals();
+    } else {
+      // If using localStorage, get goals from localStorage and set loading to false
+      const savedGoals = localStorage.getItem('goals');
+      if (savedGoals) {
+        try {
+          const parsedGoals = JSON.parse(savedGoals);
+          setGoals(parsedGoals);
+        } catch (error) {
+          console.error("Error parsing goals from localStorage:", error);
+        }
+      }
+      setIsLoading(false);
     }
   }, [isUsingLocalStorage]);
 
@@ -117,6 +133,7 @@ export function GoalsView() {
       if (!user) {
         console.warn("No authenticated user found during fetch");
         setIsUsingLocalStorage(true);
+        setIsLoading(false);
         return;
       }
       
@@ -130,6 +147,7 @@ export function GoalsView() {
         if (error.code === 'PGRST301') {
           // Invalid auth credentials
           setIsUsingLocalStorage(true);
+          setIsLoading(false);
           return;
         }
         throw error;
@@ -169,6 +187,26 @@ export function GoalsView() {
       setIsLoading(false);
     }
   };
+
+  // Sort function to move completed items to the bottom
+  const sortByCompletion = <T extends { completed: boolean }>(items: T[]): T[] => {
+    return [...items].sort((a, b) => {
+      if (a.completed === b.completed) return 0;
+      return a.completed ? 1 : -1; // Move completed items to the bottom
+    });
+  };
+
+  // Sort goals and subgoals before rendering
+  const sortedGoals = useMemo(() => {
+    // First sort the goals by completion status
+    const sorted = sortByCompletion(goals);
+    
+    // Then sort the subgoals within each goal
+    return sorted.map(goal => ({
+      ...goal,
+      subgoals: goal.subgoals ? sortByCompletion(goal.subgoals) : []
+    }));
+  }, [goals]);
 
   const handleAddGoal = async () => {
     if (!newGoalTitle.trim()) {
@@ -1142,7 +1180,7 @@ export function GoalsView() {
         </div>
       ) : (
         <div className="space-y-4">
-          {goals.map((goal) => (
+          {sortedGoals.map((goal) => (
             <CardContainer key={goal.id}>
               <div className="space-y-3">
                 <div className="flex items-start gap-3">

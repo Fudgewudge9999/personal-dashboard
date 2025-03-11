@@ -38,6 +38,13 @@ export interface Category {
   created_at: string;
 }
 
+export interface NoteCategory {
+  id: string;
+  name: string;
+  created_at: string;
+  user_id: string;
+}
+
 export interface Resource {
   id: string;
   title: string;
@@ -56,6 +63,17 @@ export interface Event {
   end_time: string;
   location: string | null;
   created_at: string;
+}
+
+export interface Note {
+  id: string;
+  title: string;
+  content: string | null;
+  category_id: string | null;
+  note_category_id: string | null;
+  created_at: string;
+  updated_at: string;
+  user_id: string;
 }
 
 // The Goal interface has been moved to use the generated types from Supabase

@@ -142,6 +142,11 @@ alter table "public"."subgoals" validate constraint "subgoals_goal_id_fkey";
 alter table "public"."tasks" add constraint "tasks_user_id_fkey" FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE not valid;
 alter table "public"."tasks" validate constraint "tasks_user_id_fkey";
 set check_function_bodies = off;
+
+-- Define the type first
+create type "public"."subgoal_position_update" as ("id" uuid, "position" integer);
+
+-- Then create the function that uses it
 CREATE OR REPLACE FUNCTION public.reorder_subgoals(goal_id_param uuid, subgoal_positions subgoal_position_update[])
  RETURNS void
  LANGUAGE plpgsql
@@ -170,7 +175,7 @@ BEGIN
     AND subgoals.goal_id = goal_id_param;
 END;
 $function$;
-create type "public"."subgoal_position_update" as ("id" uuid, "position" integer);
+
 CREATE OR REPLACE FUNCTION public.update_updated_at_column()
  RETURNS trigger
  LANGUAGE plpgsql

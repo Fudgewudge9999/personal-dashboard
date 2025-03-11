@@ -82,14 +82,49 @@ CREATE POLICY "Users can update their own focus tasks" ON "public"."focus_tasks"
 CREATE POLICY "Users can delete their own focus tasks" ON "public"."focus_tasks"
   FOR DELETE USING (auth.uid() = user_id);
 -- Create policies for goals
-CREATE POLICY "Users can view their own goals" ON "public"."goals"
-  FOR SELECT USING (auth.uid() = user_id);
-CREATE POLICY "Users can insert their own goals" ON "public"."goals"
-  FOR INSERT WITH CHECK (auth.uid() = user_id);
-CREATE POLICY "Users can update their own goals" ON "public"."goals"
-  FOR UPDATE USING (auth.uid() = user_id);
-CREATE POLICY "Users can delete their own goals" ON "public"."goals"
-  FOR DELETE USING (auth.uid() = user_id);
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies 
+    WHERE schemaname = 'public' 
+    AND tablename = 'goals' 
+    AND policyname = 'Users can view their own goals'
+  ) THEN
+    CREATE POLICY "Users can view their own goals" ON "public"."goals"
+      FOR SELECT USING (auth.uid() = user_id);
+  END IF;
+  
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies 
+    WHERE schemaname = 'public' 
+    AND tablename = 'goals' 
+    AND policyname = 'Users can insert their own goals'
+  ) THEN
+    CREATE POLICY "Users can insert their own goals" ON "public"."goals"
+      FOR INSERT WITH CHECK (auth.uid() = user_id);
+  END IF;
+  
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies 
+    WHERE schemaname = 'public' 
+    AND tablename = 'goals' 
+    AND policyname = 'Users can update their own goals'
+  ) THEN
+    CREATE POLICY "Users can update their own goals" ON "public"."goals"
+      FOR UPDATE USING (auth.uid() = user_id);
+  END IF;
+  
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies 
+    WHERE schemaname = 'public' 
+    AND tablename = 'goals' 
+    AND policyname = 'Users can delete their own goals'
+  ) THEN
+    CREATE POLICY "Users can delete their own goals" ON "public"."goals"
+      FOR DELETE USING (auth.uid() = user_id);
+  END IF;
+END
+$$;
 -- Create policies for habits
 CREATE POLICY "Users can view their own habits" ON "public"."habits"
   FOR SELECT USING (auth.uid() = user_id);
@@ -110,39 +145,109 @@ CREATE POLICY "Users can delete their own resources" ON "public"."resources"
   FOR DELETE USING (auth.uid() = user_id);
 -- Create policies for subgoals
 -- These need to check the related goals table for user ownership
-CREATE POLICY "Users can view their own subgoals" ON "public"."subgoals"
-  FOR SELECT USING (
-    auth.uid() IN (
-      SELECT user_id FROM goals WHERE id = goal_id
-    )
-  );
-CREATE POLICY "Users can insert their own subgoals" ON "public"."subgoals"
-  FOR INSERT WITH CHECK (
-    auth.uid() IN (
-      SELECT user_id FROM goals WHERE id = goal_id
-    )
-  );
-CREATE POLICY "Users can update their own subgoals" ON "public"."subgoals"
-  FOR UPDATE USING (
-    auth.uid() IN (
-      SELECT user_id FROM goals WHERE id = goal_id
-    )
-  );
-CREATE POLICY "Users can delete their own subgoals" ON "public"."subgoals"
-  FOR DELETE USING (
-    auth.uid() IN (
-      SELECT user_id FROM goals WHERE id = goal_id
-    )
-  );
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies 
+    WHERE schemaname = 'public' 
+    AND tablename = 'subgoals' 
+    AND policyname = 'Users can view their own subgoals'
+  ) THEN
+    CREATE POLICY "Users can view their own subgoals" ON "public"."subgoals"
+      FOR SELECT USING (
+        auth.uid() IN (
+          SELECT user_id FROM goals WHERE id = goal_id
+        )
+      );
+  END IF;
+  
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies 
+    WHERE schemaname = 'public' 
+    AND tablename = 'subgoals' 
+    AND policyname = 'Users can insert their own subgoals'
+  ) THEN
+    CREATE POLICY "Users can insert their own subgoals" ON "public"."subgoals"
+      FOR INSERT WITH CHECK (
+        auth.uid() IN (
+          SELECT user_id FROM goals WHERE id = goal_id
+        )
+      );
+  END IF;
+  
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies 
+    WHERE schemaname = 'public' 
+    AND tablename = 'subgoals' 
+    AND policyname = 'Users can update their own subgoals'
+  ) THEN
+    CREATE POLICY "Users can update their own subgoals" ON "public"."subgoals"
+      FOR UPDATE USING (
+        auth.uid() IN (
+          SELECT user_id FROM goals WHERE id = goal_id
+        )
+      );
+  END IF;
+  
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies 
+    WHERE schemaname = 'public' 
+    AND tablename = 'subgoals' 
+    AND policyname = 'Users can delete their own subgoals'
+  ) THEN
+    CREATE POLICY "Users can delete their own subgoals" ON "public"."subgoals"
+      FOR DELETE USING (
+        auth.uid() IN (
+          SELECT user_id FROM goals WHERE id = goal_id
+        )
+      );
+  END IF;
+END
+$$;
 -- Create policies for tasks
-CREATE POLICY "Users can view their own tasks" ON "public"."tasks"
-  FOR SELECT USING (auth.uid() = user_id);
-CREATE POLICY "Users can insert their own tasks" ON "public"."tasks"
-  FOR INSERT WITH CHECK (auth.uid() = user_id);
-CREATE POLICY "Users can update their own tasks" ON "public"."tasks"
-  FOR UPDATE USING (auth.uid() = user_id);
-CREATE POLICY "Users can delete their own tasks" ON "public"."tasks"
-  FOR DELETE USING (auth.uid() = user_id);
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies 
+    WHERE schemaname = 'public' 
+    AND tablename = 'tasks' 
+    AND policyname = 'Users can view their own tasks'
+  ) THEN
+    CREATE POLICY "Users can view their own tasks" ON "public"."tasks"
+      FOR SELECT USING (auth.uid() = user_id);
+  END IF;
+  
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies 
+    WHERE schemaname = 'public' 
+    AND tablename = 'tasks' 
+    AND policyname = 'Users can insert their own tasks'
+  ) THEN
+    CREATE POLICY "Users can insert their own tasks" ON "public"."tasks"
+      FOR INSERT WITH CHECK (auth.uid() = user_id);
+  END IF;
+  
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies 
+    WHERE schemaname = 'public' 
+    AND tablename = 'tasks' 
+    AND policyname = 'Users can update their own tasks'
+  ) THEN
+    CREATE POLICY "Users can update their own tasks" ON "public"."tasks"
+      FOR UPDATE USING (auth.uid() = user_id);
+  END IF;
+  
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies 
+    WHERE schemaname = 'public' 
+    AND tablename = 'tasks' 
+    AND policyname = 'Users can delete their own tasks'
+  ) THEN
+    CREATE POLICY "Users can delete their own tasks" ON "public"."tasks"
+      FOR DELETE USING (auth.uid() = user_id);
+  END IF;
+END
+$$;
 -- Create a function to ensure user_id is set to current user if not provided
 CREATE OR REPLACE FUNCTION public.set_user_id()
 RETURNS TRIGGER AS $$
@@ -154,35 +259,102 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 -- Create triggers to automatically set user_id if not provided
-CREATE TRIGGER set_categories_user_id
-  BEFORE INSERT ON "public"."categories"
-  FOR EACH ROW
-  EXECUTE FUNCTION public.set_user_id();
-CREATE TRIGGER set_events_user_id
-  BEFORE INSERT ON "public"."events"
-  FOR EACH ROW
-  EXECUTE FUNCTION public.set_user_id();
-CREATE TRIGGER set_focus_sessions_user_id
-  BEFORE INSERT ON "public"."focus_sessions"
-  FOR EACH ROW
-  EXECUTE FUNCTION public.set_user_id();
-CREATE TRIGGER set_focus_tasks_user_id
-  BEFORE INSERT ON "public"."focus_tasks"
-  FOR EACH ROW
-  EXECUTE FUNCTION public.set_user_id();
-CREATE TRIGGER set_goals_user_id
-  BEFORE INSERT ON "public"."goals"
-  FOR EACH ROW
-  EXECUTE FUNCTION public.set_user_id();
-CREATE TRIGGER set_habits_user_id
-  BEFORE INSERT ON "public"."habits"
-  FOR EACH ROW
-  EXECUTE FUNCTION public.set_user_id();
-CREATE TRIGGER set_resources_user_id
-  BEFORE INSERT ON "public"."resources"
-  FOR EACH ROW
-  EXECUTE FUNCTION public.set_user_id();
-CREATE TRIGGER set_tasks_user_id
-  BEFORE INSERT ON "public"."tasks"
-  FOR EACH ROW
-  EXECUTE FUNCTION public.set_user_id();
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.triggers 
+    WHERE trigger_name = 'set_categories_user_id'
+    AND event_object_table = 'categories'
+    AND event_object_schema = 'public'
+  ) THEN
+    CREATE TRIGGER set_categories_user_id
+      BEFORE INSERT ON "public"."categories"
+      FOR EACH ROW
+      EXECUTE FUNCTION public.set_user_id();
+  END IF;
+  
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.triggers 
+    WHERE trigger_name = 'set_events_user_id'
+    AND event_object_table = 'events'
+    AND event_object_schema = 'public'
+  ) THEN
+    CREATE TRIGGER set_events_user_id
+      BEFORE INSERT ON "public"."events"
+      FOR EACH ROW
+      EXECUTE FUNCTION public.set_user_id();
+  END IF;
+  
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.triggers 
+    WHERE trigger_name = 'set_focus_sessions_user_id'
+    AND event_object_table = 'focus_sessions'
+    AND event_object_schema = 'public'
+  ) THEN
+    CREATE TRIGGER set_focus_sessions_user_id
+      BEFORE INSERT ON "public"."focus_sessions"
+      FOR EACH ROW
+      EXECUTE FUNCTION public.set_user_id();
+  END IF;
+  
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.triggers 
+    WHERE trigger_name = 'set_focus_tasks_user_id'
+    AND event_object_table = 'focus_tasks'
+    AND event_object_schema = 'public'
+  ) THEN
+    CREATE TRIGGER set_focus_tasks_user_id
+      BEFORE INSERT ON "public"."focus_tasks"
+      FOR EACH ROW
+      EXECUTE FUNCTION public.set_user_id();
+  END IF;
+  
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.triggers 
+    WHERE trigger_name = 'set_goals_user_id'
+    AND event_object_table = 'goals'
+    AND event_object_schema = 'public'
+  ) THEN
+    CREATE TRIGGER set_goals_user_id
+      BEFORE INSERT ON "public"."goals"
+      FOR EACH ROW
+      EXECUTE FUNCTION public.set_user_id();
+  END IF;
+  
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.triggers 
+    WHERE trigger_name = 'set_habits_user_id'
+    AND event_object_table = 'habits'
+    AND event_object_schema = 'public'
+  ) THEN
+    CREATE TRIGGER set_habits_user_id
+      BEFORE INSERT ON "public"."habits"
+      FOR EACH ROW
+      EXECUTE FUNCTION public.set_user_id();
+  END IF;
+  
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.triggers 
+    WHERE trigger_name = 'set_resources_user_id'
+    AND event_object_table = 'resources'
+    AND event_object_schema = 'public'
+  ) THEN
+    CREATE TRIGGER set_resources_user_id
+      BEFORE INSERT ON "public"."resources"
+      FOR EACH ROW
+      EXECUTE FUNCTION public.set_user_id();
+  END IF;
+  
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.triggers 
+    WHERE trigger_name = 'set_tasks_user_id'
+    AND event_object_table = 'tasks'
+    AND event_object_schema = 'public'
+  ) THEN
+    CREATE TRIGGER set_tasks_user_id
+      BEFORE INSERT ON "public"."tasks"
+      FOR EACH ROW
+      EXECUTE FUNCTION public.set_user_id();
+  END IF;
+END
+$$;
