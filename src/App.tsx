@@ -10,7 +10,6 @@ import { TimerInitializer } from "./components/common/TimerInitializer";
 import Index from "./pages/Index";
 import Calendar from "./pages/Calendar";
 import Tasks from "./pages/Tasks";
-import Habits from "./pages/Habits";
 import Resources from "./pages/Resources";
 import Analytics from "./pages/Analytics";
 import Focus from "./pages/Focus";
@@ -84,14 +83,6 @@ const App = () => (
               element={
                 <ProtectedRoute>
                   <Tasks />
-                </ProtectedRoute>
-              } 
-            />
-            <Route 
-              path="/habits" 
-              element={
-                <ProtectedRoute>
-                  <Habits />
                 </ProtectedRoute>
               } 
             />

@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { Play, Pause, RotateCcw } from "lucide-react";
+import { Play, Pause, RotateCcw, Volume2, VolumeX } from "lucide-react";
 import { AppButton } from "./AppButton";
 import { useTimerStore } from "@/store/useTimerStore";
 import { cn } from "@/lib/utils";
@@ -17,12 +17,15 @@ export function Timer({ showControls = true, showDurationOptions = true, size = 
     isActive,
     isPaused,
     selectedDuration,
+    soundEnabled,
     startTimer,
     pauseTimer,
     resumeTimer,
     resetTimer,
     setDuration,
-    setupTimerInterval
+    setupTimerInterval,
+    updateDocumentTitle,
+    toggleSound
   } = useTimerStore();
 
   // Ensure the timer interval is set up when the component mounts
@@ -30,7 +33,15 @@ export function Timer({ showControls = true, showDurationOptions = true, size = 
     if (isActive && !isPaused) {
       setupTimerInterval();
     }
-  }, [isActive, isPaused, setupTimerInterval]);
+    
+    // Update document title when component mounts
+    updateDocumentTitle();
+    
+    // Reset document title when component unmounts
+    return () => {
+      document.title = 'Reflection Nook';
+    };
+  }, [isActive, isPaused, setupTimerInterval, updateDocumentTitle]);
 
   const toggleTimer = () => {
     if (!isActive) {
@@ -57,7 +68,7 @@ export function Timer({ showControls = true, showDurationOptions = true, size = 
   const progressPercentage = calculateProgress();
 
   return (
-    <div className="flex flex-col items-center justify-center w-full">
+    <div className="flex flex-col items-center justify-center w-full relative">
       <div className={cn(
         "font-medium tracking-wider mb-4",
         size === "lg" ? "text-6xl" : "text-4xl"
@@ -75,6 +86,15 @@ export function Timer({ showControls = true, showDurationOptions = true, size = 
           style={{ width: `${progressPercentage}%` }}
         />
       </div>
+
+      {/* Sound Toggle Button */}
+      <button
+        onClick={toggleSound}
+        className="absolute top-0 right-0 p-2 rounded-full bg-secondary hover:bg-secondary/80 transition-colors"
+        title={soundEnabled ? "Mute completion sound" : "Enable completion sound"}
+      >
+        {soundEnabled ? <Volume2 size={16} /> : <VolumeX size={16} />}
+      </button>
 
       {showDurationOptions && (
         <div className="flex gap-3 mb-4">

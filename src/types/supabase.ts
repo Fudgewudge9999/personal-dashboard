@@ -10,18 +10,6 @@
 
 // Type definitions for Supabase tables
 
-export interface Habit {
-  id: string;
-  name: string;
-  description: string | null;
-  target_days: number;
-  current_streak: number;
-  completed_today: boolean;
-  start_date: string;
-  created_at: string;
-  last_completed_date: string | null;
-}
-
 export interface Task {
   id: string;
   title: string;

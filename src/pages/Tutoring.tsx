@@ -7,6 +7,7 @@ import {
   TutoringStudentList,
   TutoringSessionList,
   TutoringAnalytics,
+  TutoringCalendar,
   AddStudentDialog,
   AddSessionDialog
 } from "@/components/tutoring";
@@ -41,7 +42,7 @@ export default function Tutoring() {
                 <PlusCircle className="h-4 w-4" />
                 Add Student
               </Button>
-            ) : activeTab === "sessions" ? (
+            ) : activeTab === "sessions" || activeTab === "calendar" ? (
               <Button 
                 onClick={() => setIsAddSessionOpen(true)}
                 className="flex items-center gap-1"
@@ -58,9 +59,10 @@ export default function Tutoring() {
           onValueChange={(value) => setActiveTab(value)}
           className="w-full"
         >
-          <TabsList className="grid w-full grid-cols-3">
+          <TabsList className="grid w-full grid-cols-4">
             <TabsTrigger value="students">Students</TabsTrigger>
             <TabsTrigger value="sessions">Sessions</TabsTrigger>
+            <TabsTrigger value="calendar">Calendar</TabsTrigger>
             <TabsTrigger value="analytics">Analytics</TabsTrigger>
           </TabsList>
           <TabsContent value="students" className="mt-4">
@@ -68,6 +70,9 @@ export default function Tutoring() {
           </TabsContent>
           <TabsContent value="sessions" className="mt-4">
             <TutoringSessionList key={`sessions-${refreshTrigger}`} />
+          </TabsContent>
+          <TabsContent value="calendar" className="mt-4">
+            <TutoringCalendar key={`calendar-${refreshTrigger}`} />
           </TabsContent>
           <TabsContent value="analytics" className="mt-4">
             <TutoringAnalytics key={`analytics-${refreshTrigger}`} />

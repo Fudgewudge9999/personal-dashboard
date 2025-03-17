@@ -1,7 +1,6 @@
 import { WelcomeWidget } from "./WelcomeWidget";
 import { ScheduleWidget } from "./ScheduleWidget";
 import { TasksWidget } from "./TasksWidget";
-import { HabitWidget } from "./HabitWidget";
 import { useState } from "react";
 import { Timer } from "../common/Timer";
 import { Link } from "react-router-dom";
@@ -44,8 +43,7 @@ export function DashboardView() {
       </div>
       
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <TasksWidget className="md:col-span-2" refreshTrigger={tasksRefreshTrigger} />
-        <HabitWidget />
+        <TasksWidget className="md:col-span-3" refreshTrigger={tasksRefreshTrigger} />
       </div>
       
       <div className="grid grid-cols-1 gap-6">

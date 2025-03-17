@@ -5,4 +5,5 @@ export * from './TutoringAnalytics';
 export * from './AddStudentDialog';
 export * from './AddSessionDialog';
 export * from './EditStudentDialog';
-export * from './EditSessionDialog'; 
+export * from './EditSessionDialog';
+export * from './TutoringCalendar'; 
