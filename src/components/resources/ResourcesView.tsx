@@ -8,6 +8,8 @@ import { AddResourceForm } from "./AddResourceForm";
 import { EditResourceForm } from "./EditResourceForm";
 import { AddCategoryForm } from "./AddCategoryForm";
 import { EditCategoryForm } from "./EditCategoryForm";
+import { AddSubcategoryForm } from "./AddSubcategoryForm";
+import { EditSubcategoryForm } from "./EditSubcategoryForm";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { addUserIdToData } from "@/utils/supabase-utils";
@@ -17,6 +19,7 @@ interface Resource {
   title: string;
   type: "document" | "spreadsheet" | "link";
   category_id: string;
+  subcategory_id?: string;
   url?: string;
   description?: string;
   created_at: string;
@@ -31,27 +34,42 @@ interface Category {
   count: number;
 }
 
+interface Subcategory {
+  id: string;
+  name: string;
+  category_id: string;
+  user_id?: string;
+  created_at?: string;
+}
+
 export function ResourcesView() {
   const [categories, setCategories] = useState<Category[]>([]);
+  const [subcategories, setSubcategories] = useState<Subcategory[]>([]);
   const [resources, setResources] = useState<Resource[]>([]);
   const [isLoadingCategories, setIsLoadingCategories] = useState(true);
   const [isLoadingResources, setIsLoadingResources] = useState(true);
   const [isAddResourceModalOpen, setIsAddResourceModalOpen] = useState(false);
   const [isAddCategoryModalOpen, setIsAddCategoryModalOpen] = useState(false);
+  const [isAddSubcategoryModalOpen, setIsAddSubcategoryModalOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [showAddResourceModal, setShowAddResourceModal] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [selectedSubcategory, setSelectedSubcategory] = useState<string | null>(null);
   const [isAddingResource, setIsAddingResource] = useState(false);
   const [editingResource, setEditingResource] = useState<Resource | null>(null);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showActionsFor, setShowActionsFor] = useState<string | null>(null);
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
+  const [editingSubcategory, setEditingSubcategory] = useState<Subcategory | null>(null);
   const [isEditCategoryModalOpen, setIsEditCategoryModalOpen] = useState(false);
+  const [isEditSubcategoryModalOpen, setIsEditSubcategoryModalOpen] = useState(false);
   const [showCategoryActionsFor, setShowCategoryActionsFor] = useState<string | null>(null);
+  const [showSubcategoryActionsFor, setShowSubcategoryActionsFor] = useState<string | null>(null);
   
   useEffect(() => {
     fetchCategories();
     fetchResources();
+    fetchSubcategories();
   }, []);
   
   const fetchCategories = async () => {
@@ -108,6 +126,21 @@ export function ResourcesView() {
       toast.error('Failed to load resources');
     } finally {
       setIsLoadingResources(false);
+    }
+  };
+  
+  const fetchSubcategories = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('subcategories')
+        .select('*');
+        
+      if (error) throw error;
+      
+      setSubcategories(data);
+    } catch (error) {
+      console.error('Error fetching subcategories:', error);
+      toast.error('Failed to load subcategories');
     }
   };
   
@@ -223,11 +256,12 @@ export function ResourcesView() {
   // Filter resources based on selected category and search query
   const filteredResources = resources.filter(resource => {
     const matchesCategory = selectedCategory ? resource.category_id === selectedCategory : true;
+    const matchesSubcategory = selectedSubcategory ? resource.subcategory_id === selectedSubcategory : true;
     const matchesSearch = searchQuery
       ? resource.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
         (resource.description?.toLowerCase().includes(searchQuery.toLowerCase()) ?? false)
       : true;
-    return matchesCategory && matchesSearch;
+    return matchesCategory && matchesSubcategory && matchesSearch;
   });
   
   // Sort resources by created_at (newest first)
@@ -239,6 +273,13 @@ export function ResourcesView() {
   const getCategoryName = (categoryId: string) => {
     const category = categories.find(cat => cat.id === categoryId);
     return category ? category.name : "Uncategorized";
+  };
+
+  // Find subcategory name by id
+  const getSubcategoryName = (subcategoryId?: string) => {
+    if (!subcategoryId) return null;
+    const subcategory = subcategories.find(sub => sub.id === subcategoryId);
+    return subcategory ? subcategory.name : null;
   };
 
   const getFileUrl = async (filePath: string) => {
@@ -364,6 +405,87 @@ export function ResourcesView() {
     }
   };
 
+  const handleAddSubcategory = async (subcategory: { name: string; category_id: string }) => {
+    try {
+      // Add user_id to the subcategory data
+      const subcategoryWithUserId = await addUserIdToData({
+        name: subcategory.name,
+        category_id: subcategory.category_id,
+      });
+
+      const { data, error } = await supabase
+        .from("subcategories")
+        .insert(subcategoryWithUserId)
+        .select()
+        .single();
+
+      if (error) {
+        if (error.code === "23505") {
+          toast.error("A subcategory with this name already exists");
+        } else {
+          throw error;
+        }
+        return;
+      }
+
+      setSubcategories([...subcategories, data]);
+      setIsAddSubcategoryModalOpen(false);
+      toast.success("Subcategory added successfully");
+    } catch (error) {
+      console.error("Error adding subcategory:", error);
+      toast.error("Failed to add subcategory");
+    }
+  };
+
+  const handleEditSubcategory = async (subcategory: { id: string; name: string; category_id: string }) => {
+    try {
+      const { error } = await supabase
+        .from('subcategories')
+        .update({
+          name: subcategory.name,
+          category_id: subcategory.category_id
+        })
+        .eq('id', subcategory.id);
+        
+      if (error) throw error;
+      
+      setSubcategories(subcategories.map(sub => 
+        sub.id === subcategory.id ? { ...sub, ...subcategory } : sub
+      ));
+      
+      setIsEditSubcategoryModalOpen(false);
+      toast.success("Subcategory updated successfully");
+    } catch (error) {
+      console.error('Error updating subcategory:', error);
+      toast.error('Failed to update subcategory');
+    }
+  };
+
+  const handleDeleteSubcategory = async (subcategoryId: string) => {
+    try {
+      // Check if subcategory has resources
+      const resourcesInSubcategory = resources.filter(resource => resource.subcategory_id === subcategoryId);
+      
+      if (resourcesInSubcategory.length > 0) {
+        toast.error("Cannot delete subcategory with resources. Remove resources first.");
+        return;
+      }
+      
+      const { error } = await supabase
+        .from('subcategories')
+        .delete()
+        .eq('id', subcategoryId);
+        
+      if (error) throw error;
+      
+      setSubcategories(subcategories.filter(sub => sub.id !== subcategoryId));
+      toast.success("Subcategory deleted successfully");
+    } catch (error) {
+      console.error('Error deleting subcategory:', error);
+      toast.error('Failed to delete subcategory');
+    }
+  };
+
   return (
     <div className="container mx-auto p-4 max-w-7xl">
       <h1 className="text-2xl font-bold mb-6">Resources</h1>
@@ -394,68 +516,152 @@ export function ResourcesView() {
               {categories.map((category) => (
                 <div
                   key={category.id}
-                  className={`group flex items-center justify-between px-3 py-2 rounded-md transition-colors ${
-                    selectedCategory === category.id ? "bg-primary/10 text-primary" : "hover:bg-gray-100"
-                  }`}
+                  className="space-y-1"
                 >
-                  <button
-                    className="flex-1 text-left flex items-center justify-between"
-                    onClick={() => setSelectedCategory(category.id)}
+                  <div
+                    className={`group flex items-center justify-between px-3 py-2 rounded-md transition-colors ${
+                      selectedCategory === category.id ? "bg-primary/10 text-primary" : "hover:bg-gray-100"
+                    }`}
                   >
-                    <span>{category.name}</span>
-                    <span className="text-xs text-muted-foreground bg-gray-100 px-2 py-1 rounded-full">
-                      {category.count}
-                    </span>
-                  </button>
-                  <div className="relative ml-2 opacity-0 group-hover:opacity-100 transition-opacity">
                     <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setShowCategoryActionsFor(showCategoryActionsFor === category.id ? null : category.id);
+                      className="flex-1 text-left flex items-center justify-between"
+                      onClick={() => {
+                        setSelectedCategory(category.id);
+                        setSelectedSubcategory(null);
                       }}
-                      className="p-1 hover:bg-gray-100 rounded-full"
                     >
-                      <MoreVertical size={14} />
+                      <span>{category.name}</span>
+                      <span className="text-xs text-muted-foreground bg-gray-100 px-2 py-1 rounded-full">
+                        {category.count}
+                      </span>
                     </button>
-                    
-                    {showCategoryActionsFor === category.id && (
-                      <div className="absolute right-0 mt-1 w-36 bg-white rounded-md shadow-lg z-10 border">
-                        <div className="py-1">
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setEditingCategory(category);
-                              setIsEditCategoryModalOpen(true);
-                              setShowCategoryActionsFor(null);
-                            }}
-                            className="flex items-center w-full px-3 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                          >
-                            <Edit size={14} className="mr-2" />
-                            Edit
-                          </button>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              if (category.count > 0) {
-                                toast.error("Cannot delete category with resources. Remove resources first.");
+                    <div className="relative ml-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setShowCategoryActionsFor(showCategoryActionsFor === category.id ? null : category.id);
+                        }}
+                        className="p-1 hover:bg-gray-100 rounded-full"
+                      >
+                        <MoreVertical size={14} />
+                      </button>
+                      
+                      {showCategoryActionsFor === category.id && (
+                        <div className="absolute right-0 mt-1 w-36 bg-white rounded-md shadow-lg z-10 border">
+                          <div className="py-1">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setEditingCategory(category);
+                                setIsEditCategoryModalOpen(true);
                                 setShowCategoryActionsFor(null);
-                                return;
-                              }
-                              
-                              if (confirm('Are you sure you want to delete this category?')) {
-                                handleDeleteCategory(category.id);
-                              }
-                              setShowCategoryActionsFor(null);
-                            }}
-                            className="flex items-center w-full px-3 py-2 text-sm text-red-600 hover:bg-gray-100"
-                          >
-                            <Trash2 size={14} className="mr-2" />
-                            Delete
-                          </button>
+                              }}
+                              className="flex items-center w-full px-3 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                            >
+                              <Edit size={14} className="mr-2" />
+                              Edit
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setIsAddSubcategoryModalOpen(true);
+                                setShowCategoryActionsFor(null);
+                              }}
+                              className="flex items-center w-full px-3 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                            >
+                              <FolderPlus size={14} className="mr-2" />
+                              Add Subcategory
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (category.count > 0) {
+                                  toast.error("Cannot delete category with resources. Remove resources first.");
+                                  setShowCategoryActionsFor(null);
+                                  return;
+                                }
+                                
+                                if (confirm('Are you sure you want to delete this category?')) {
+                                  handleDeleteCategory(category.id);
+                                }
+                                setShowCategoryActionsFor(null);
+                              }}
+                              className="flex items-center w-full px-3 py-2 text-sm text-red-600 hover:bg-gray-100"
+                            >
+                              <Trash2 size={14} className="mr-2" />
+                              Delete
+                            </button>
+                          </div>
                         </div>
-                      </div>
-                    )}
+                      )}
+                    </div>
                   </div>
+                  
+                  {/* Subcategories */}
+                  {selectedCategory === category.id && (
+                    <div className="ml-4 space-y-1">
+                      {subcategories
+                        .filter(sub => sub.category_id === category.id)
+                        .map(subcategory => (
+                          <div
+                            key={subcategory.id}
+                            className={`group flex items-center justify-between px-3 py-2 rounded-md transition-colors ${
+                              selectedSubcategory === subcategory.id ? "bg-primary/10 text-primary" : "hover:bg-gray-100"
+                            }`}
+                          >
+                            <button
+                              className="flex-1 text-left flex items-center"
+                              onClick={() => setSelectedSubcategory(subcategory.id)}
+                            >
+                              <span className="text-sm">{subcategory.name}</span>
+                            </button>
+                            <div className="relative ml-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setShowSubcategoryActionsFor(showSubcategoryActionsFor === subcategory.id ? null : subcategory.id);
+                                }}
+                                className="p-1 hover:bg-gray-100 rounded-full"
+                              >
+                                <MoreVertical size={14} />
+                              </button>
+                              
+                              {showSubcategoryActionsFor === subcategory.id && (
+                                <div className="absolute right-0 mt-1 w-36 bg-white rounded-md shadow-lg z-10 border">
+                                  <div className="py-1">
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setEditingSubcategory(subcategory);
+                                        setIsEditSubcategoryModalOpen(true);
+                                        setShowSubcategoryActionsFor(null);
+                                      }}
+                                      className="flex items-center w-full px-3 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                                    >
+                                      <Edit size={14} className="mr-2" />
+                                      Edit
+                                    </button>
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        if (confirm('Are you sure you want to delete this subcategory?')) {
+                                          handleDeleteSubcategory(subcategory.id);
+                                        }
+                                        setShowSubcategoryActionsFor(null);
+                                      }}
+                                      className="flex items-center w-full px-3 py-2 text-sm text-red-600 hover:bg-gray-100"
+                                    >
+                                      <Trash2 size={14} className="mr-2" />
+                                      Delete
+                                    </button>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
@@ -555,6 +761,12 @@ export function ResourcesView() {
                         <span className="mx-2">•</span>
                         <span>
                           {getCategoryName(resource.category_id)}
+                          {resource.subcategory_id && (
+                            <>
+                              <span className="mx-1">/</span>
+                              <span>{getSubcategoryName(resource.subcategory_id)}</span>
+                            </>
+                          )}
                         </span>
                       </div>
                     </div>
@@ -629,6 +841,7 @@ export function ResourcesView() {
       >
         <AddResourceForm
           categories={categories}
+          subcategories={subcategories}
           onSubmit={handleAddResource}
           onCancel={() => setShowAddResourceModal(false)}
         />
@@ -644,6 +857,7 @@ export function ResourcesView() {
           <EditResourceForm
             resource={editingResource}
             categories={categories}
+            subcategories={subcategories}
             onSubmit={handleUpdateResource}
             onCancel={() => setShowEditModal(false)}
           />
@@ -662,6 +876,35 @@ export function ResourcesView() {
             initialName={editingCategory.name}
             onSubmit={handleEditCategory}
             onCancel={() => setIsEditCategoryModalOpen(false)}
+          />
+        )}
+      </Modal>
+
+      <Modal
+        isOpen={isAddSubcategoryModalOpen}
+        onClose={() => setIsAddSubcategoryModalOpen(false)}
+        title="Add New Subcategory"
+        className="max-w-md mx-auto"
+      >
+        <AddSubcategoryForm
+          categories={categories}
+          onSubmit={handleAddSubcategory}
+          onCancel={() => setIsAddSubcategoryModalOpen(false)}
+        />
+      </Modal>
+
+      <Modal
+        isOpen={isEditSubcategoryModalOpen}
+        onClose={() => setIsEditSubcategoryModalOpen(false)}
+        title="Edit Subcategory"
+        className="max-w-md mx-auto"
+      >
+        {editingSubcategory && (
+          <EditSubcategoryForm
+            subcategory={editingSubcategory}
+            categories={categories}
+            onSubmit={handleEditSubcategory}
+            onCancel={() => setIsEditSubcategoryModalOpen(false)}
           />
         )}
       </Modal>

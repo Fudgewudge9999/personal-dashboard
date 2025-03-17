@@ -18,6 +18,7 @@ interface TimerState {
   sessionStartTime: number | null;
   totalPausedTime: number;
   lastPauseTime: number | null;
+  timerInterval: number | null;
 
   // Actions
   startTimer: (duration?: number) => void;
@@ -30,6 +31,8 @@ interface TimerState {
   setCurrentNotes: (notes: string) => void;
   saveSession: (completed: boolean) => Promise<void>;
   tick: () => void;
+  setupTimerInterval: () => void;
+  clearTimerInterval: () => void;
 }
 
 export const useTimerStore = create<TimerState>((set, get) => ({
@@ -44,9 +47,13 @@ export const useTimerStore = create<TimerState>((set, get) => ({
   sessionStartTime: null,
   totalPausedTime: 0,
   lastPauseTime: null,
+  timerInterval: null,
 
   startTimer: (duration) => {
     const state = get();
+    // Clear any existing interval first
+    state.clearTimerInterval();
+    
     const newDuration = duration || state.selectedDuration;
     set({
       isActive: true,
@@ -58,10 +65,18 @@ export const useTimerStore = create<TimerState>((set, get) => ({
       totalPausedTime: 0,
       lastPauseTime: null
     });
+    
+    // Set up the interval
+    state.setupTimerInterval();
+    
+    // Save the session
     get().saveSession(false);
   },
 
   pauseTimer: () => {
+    const state = get();
+    state.clearTimerInterval();
+    
     set({ 
       isPaused: true,
       lastPauseTime: Date.now()
@@ -76,10 +91,21 @@ export const useTimerStore = create<TimerState>((set, get) => ({
         totalPausedTime: state.totalPausedTime + (Date.now() - (state.lastPauseTime || 0)),
         lastPauseTime: null
       }));
+      
+      // Set up the interval again
+      state.setupTimerInterval();
     }
   },
 
   resetTimer: () => {
+    const state = get();
+    state.clearTimerInterval();
+    
+    // If the timer was active, save the session as interrupted
+    if (state.isActive) {
+      state.saveSession(false);
+    }
+    
     set({
       isActive: false,
       isPaused: false,
@@ -88,7 +114,8 @@ export const useTimerStore = create<TimerState>((set, get) => ({
       currentSessionId: null,
       sessionStartTime: null,
       totalPausedTime: 0,
-      lastPauseTime: null
+      lastPauseTime: null,
+      timerInterval: null
     });
   },
 
@@ -113,6 +140,26 @@ export const useTimerStore = create<TimerState>((set, get) => ({
     set({ currentNotes: notes });
   },
 
+  setupTimerInterval: () => {
+    const state = get();
+    // Only set up interval if timer is active and not paused
+    if (state.isActive && !state.isPaused && !state.timerInterval) {
+      const interval = window.setInterval(() => {
+        get().tick();
+      }, 1000);
+      
+      set({ timerInterval: interval });
+    }
+  },
+
+  clearTimerInterval: () => {
+    const state = get();
+    if (state.timerInterval) {
+      window.clearInterval(state.timerInterval);
+      set({ timerInterval: null });
+    }
+  },
+
   saveSession: async (completed) => {
     const state = get();
     try {
@@ -128,9 +175,15 @@ export const useTimerStore = create<TimerState>((set, get) => ({
       }
       
       if (state.sessionStartTime) {
-        const totalTime = Date.now() - state.sessionStartTime;
-        const activeTime = totalTime - state.totalPausedTime - (state.lastPauseTime ? (Date.now() - state.lastPauseTime) : 0);
-        actualDuration = Math.floor(activeTime / 1000 / 60); // Convert to minutes
+        // For completed timers, use the selectedDuration as the actual duration
+        if (completed) {
+          actualDuration = state.selectedDuration;
+        } else {
+          // For interrupted timers, calculate the actual time spent
+          const totalTime = Date.now() - state.sessionStartTime;
+          const activeTime = totalTime - state.totalPausedTime - (state.lastPauseTime ? (Date.now() - state.lastPauseTime) : 0);
+          actualDuration = Math.floor(activeTime / 1000 / 60); // Convert to minutes
+        }
       }
 
       // If we already have a session ID, update it
@@ -139,7 +192,8 @@ export const useTimerStore = create<TimerState>((set, get) => ({
           .from('focus_sessions')
           .update({ 
             completed,
-            actual_duration: actualDuration
+            actual_duration: actualDuration,
+            notes: state.currentNotes || null // Ensure notes are saved
           })
           .eq('id', state.currentSessionId);
 
@@ -190,6 +244,7 @@ export const useTimerStore = create<TimerState>((set, get) => ({
     if (state.seconds === 0) {
       if (state.minutes === 0) {
         // Timer completed
+        state.clearTimerInterval();
         set({ isActive: false });
         state.saveSession(true);
       } else {

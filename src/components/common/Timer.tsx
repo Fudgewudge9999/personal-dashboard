@@ -22,23 +22,15 @@ export function Timer({ showControls = true, showDurationOptions = true, size = 
     resumeTimer,
     resetTimer,
     setDuration,
-    tick
+    setupTimerInterval
   } = useTimerStore();
 
-  // Set up the timer interval
+  // Ensure the timer interval is set up when the component mounts
   useEffect(() => {
-    let interval: NodeJS.Timeout | null = null;
-
     if (isActive && !isPaused) {
-      interval = setInterval(() => {
-        tick();
-      }, 1000);
+      setupTimerInterval();
     }
-
-    return () => {
-      if (interval) clearInterval(interval);
-    };
-  }, [isActive, isPaused, tick]);
+  }, [isActive, isPaused, setupTimerInterval]);
 
   const toggleTimer = () => {
     if (!isActive) {
@@ -54,13 +46,34 @@ export function Timer({ showControls = true, showDurationOptions = true, size = 
     return `${min.toString().padStart(2, '0')}:${sec.toString().padStart(2, '0')}`;
   };
 
+  // Calculate progress percentage
+  const calculateProgress = () => {
+    const totalSeconds = selectedDuration * 60;
+    const remainingSeconds = minutes * 60 + seconds;
+    const elapsedSeconds = totalSeconds - remainingSeconds;
+    return Math.min(100, (elapsedSeconds / totalSeconds) * 100);
+  };
+
+  const progressPercentage = calculateProgress();
+
   return (
-    <div className="flex flex-col items-center justify-center">
+    <div className="flex flex-col items-center justify-center w-full">
       <div className={cn(
         "font-medium tracking-wider mb-4",
         size === "lg" ? "text-6xl" : "text-4xl"
       )}>
         {formatTime(minutes, seconds)}
+      </div>
+
+      {/* Progress Bar */}
+      <div className="w-full h-2 bg-secondary rounded-full mb-6">
+        <div 
+          className={cn(
+            "h-full rounded-full transition-all",
+            isActive ? (isPaused ? "bg-amber-500" : "bg-primary") : "bg-muted"
+          )}
+          style={{ width: `${progressPercentage}%` }}
+        />
       </div>
 
       {showDurationOptions && (

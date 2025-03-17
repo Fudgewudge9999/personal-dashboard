@@ -8,6 +8,7 @@ import { TaskForm } from "./TaskForm";
 import { SubtaskForm } from "./SubtaskForm";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 
 interface Subtask {
   id: string;
@@ -317,6 +318,66 @@ export function TasksView() {
     return new Date(task.due_date) > today;
   };
   
+  // Group completed tasks by date
+  const groupTasksByCompletionDate = (tasks: Task[]) => {
+    const grouped: Record<string, Task[]> = {};
+    
+    tasks.forEach(task => {
+      if (task.status === 'completed' && task.completed_at) {
+        // Format date as YYYY-MM-DD for grouping
+        const completedDate = new Date(task.completed_at);
+        const dateKey = completedDate.toISOString().split('T')[0];
+        
+        if (!grouped[dateKey]) {
+          grouped[dateKey] = [];
+        }
+        
+        grouped[dateKey].push(task);
+      }
+    });
+    
+    // Sort the dates based on user preference
+    const sortedDates = Object.keys(grouped).sort((a, b) => {
+      if (completedSort === 'newest') {
+        return new Date(b).getTime() - new Date(a).getTime();
+      } else {
+        return new Date(a).getTime() - new Date(b).getTime();
+      }
+    });
+    
+    // Create a new object with sorted dates
+    const result: Record<string, Task[]> = {};
+    sortedDates.forEach(date => {
+      result[date] = grouped[date];
+    });
+    
+    return result;
+  };
+  
+  // Format date for display
+  const formatDateForDisplay = (dateString: string) => {
+    const date = new Date(dateString);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+    
+    if (date.toDateString() === today.toDateString()) {
+      return 'Today';
+    } else if (date.toDateString() === yesterday.toDateString()) {
+      return 'Yesterday';
+    } else {
+      // Format as "Monday, 15 April 2023"
+      return date.toLocaleDateString('en-GB', { 
+        weekday: 'long', 
+        day: 'numeric', 
+        month: 'long', 
+        year: 'numeric' 
+      });
+    }
+  };
+  
   const filteredTasks = tasks.filter(task => {
     // First apply search filter
     const matchesSearch = 
@@ -368,6 +429,12 @@ export function TasksView() {
     // Finally sort by created date
     return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
   });
+  
+  // Group completed tasks by date when in completed filter
+  const isCompletedFilter = activeFilter === 'completed';
+  const groupedCompletedTasks = isCompletedFilter 
+    ? groupTasksByCompletionDate(filteredTasks)
+    : {};
 
   const handleAddSubtask = async (taskId: string, subtaskData: { title: string }) => {
     try {
@@ -513,7 +580,7 @@ export function TasksView() {
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-medium">Tasks</h1>
         <div className="flex gap-2">
-          {activeFilter === 'completed' && tasks.filter(t => t.status === 'completed').length > 0 && (
+          {isCompletedFilter && tasks.filter(t => t.status === 'completed').length > 0 && (
             <AppButton 
               variant="outline"
               onClick={clearCompletedTasks}
@@ -581,7 +648,7 @@ export function TasksView() {
             Completed
             {tasks.filter(t => t.status === 'completed').length > 0 && (
               <span className={`ml-1.5 px-1.5 py-0.5 text-xs rounded-full ${
-                activeFilter === "completed" 
+                isCompletedFilter 
                   ? "bg-white text-primary" 
                   : "bg-primary text-white"
               }`}>
@@ -631,7 +698,7 @@ export function TasksView() {
         </div>
       )}
       
-      {activeFilter === 'completed' && (
+      {isCompletedFilter && tasks.filter(t => t.status === 'completed').length > 0 && (
         <div className="mb-4">
           <CardContainer className="p-4">
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -679,6 +746,171 @@ export function TasksView() {
           <div className="p-8 text-center text-muted-foreground">
             {searchQuery ? "No tasks match your search" : "No tasks available"}
           </div>
+        ) : isCompletedFilter ? (
+          // Accordion for completed tasks grouped by date
+          <Accordion type="multiple" className="w-full">
+            {Object.entries(groupedCompletedTasks).map(([dateKey, dateTasks]) => (
+              <AccordionItem key={dateKey} value={dateKey} className="border-b border-border">
+                <AccordionTrigger className="px-4 hover:no-underline">
+                  <div className="flex items-center justify-between w-full">
+                    <span className="font-medium">{formatDateForDisplay(dateKey)}</span>
+                    <Badge variant="secondary" className="bg-green-100 text-green-800 ml-2">
+                      {dateTasks.length} {dateTasks.length === 1 ? 'task' : 'tasks'}
+                    </Badge>
+                  </div>
+                </AccordionTrigger>
+                <AccordionContent>
+                  <div className="divide-y">
+                    {dateTasks.map(task => (
+                      <div key={task.id} className="py-4 animate-slide-up">
+                        <div className="flex items-start gap-3">
+                          <button
+                            onClick={() => toggleTaskCompletion(task.id, task.status)}
+                            className="mt-0.5 flex-shrink-0 text-muted-foreground hover:text-primary transition-colors"
+                          >
+                            {task.status === 'completed' 
+                              ? <CheckCircle2 size={20} className="text-primary" /> 
+                              : <Circle size={20} />
+                            }
+                          </button>
+                          
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2">
+                              <button 
+                                onClick={() => setExpandedTasks(prev => ({ ...prev, [task.id]: !prev[task.id] }))}
+                                className="flex items-center gap-2 hover:text-primary transition-colors"
+                              >
+                                {expandedTasks[task.id] ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                                <h3 className={`font-medium ${task.status === 'completed' ? 'line-through text-muted-foreground' : ''}`}>
+                                  {task.title}
+                                </h3>
+                              </button>
+                              <div className="flex gap-2">
+                                <Badge 
+                                  variant="secondary" 
+                                  className={priorityLabels[task.priority as keyof typeof priorityLabels].class}
+                                >
+                                  {priorityLabels[task.priority as keyof typeof priorityLabels].label}
+                                </Badge>
+                                {task.subtasks && task.subtasks.length > 0 && (
+                                  <Badge variant="secondary" className="bg-blue-100 text-blue-800">
+                                    {task.subtasks.filter(s => s.status === 'completed').length}/{task.subtasks.length}
+                                  </Badge>
+                                )}
+                              </div>
+                            </div>
+                            
+                            {task.description && (
+                              <p className="text-sm text-muted-foreground mt-1">
+                                {task.description}
+                              </p>
+                            )}
+                            
+                            {task.due_date && (
+                              <p className="text-xs mt-2 text-muted-foreground">
+                                Due: {new Date(task.due_date).toLocaleDateString('en-GB')}
+                              </p>
+                            )}
+                            
+                            {task.status === 'completed' && task.completed_at && (
+                              <p className="text-xs mt-2 text-green-600 font-medium">
+                                Completed at: {new Date(task.completed_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                              </p>
+                            )}
+
+                            {/* Subtasks section */}
+                            {expandedTasks[task.id] && (
+                              <div className="mt-4 space-y-2 pl-6 border-l-2 border-gray-100">
+                                {task.subtasks?.map(subtask => (
+                                  <div key={subtask.id} className="flex items-center gap-2 group">
+                                    <button
+                                      onClick={() => toggleSubtaskCompletion(task.id, subtask.id, subtask.status)}
+                                      className="flex-shrink-0 text-muted-foreground hover:text-primary transition-colors"
+                                    >
+                                      {subtask.status === 'completed' 
+                                        ? <CheckCircle2 size={16} className="text-primary" /> 
+                                        : <Circle size={16} />
+                                      }
+                                    </button>
+                                    <span className={`flex-1 text-sm ${subtask.status === 'completed' ? 'line-through text-muted-foreground' : ''}`}>
+                                      {subtask.title}
+                                    </span>
+                                    <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                      <button
+                                        onClick={() => {
+                                          setEditingSubtask(subtask);
+                                          setIsSubtaskModalOpen(true);
+                                        }}
+                                        className="text-muted-foreground hover:text-primary transition-colors"
+                                        aria-label={`Edit ${subtask.title} subtask`}
+                                      >
+                                        <Pencil size={14} />
+                                      </button>
+                                      <button
+                                        onClick={() => handleDeleteSubtask(task.id, subtask.id)}
+                                        className="text-muted-foreground hover:text-destructive transition-colors"
+                                        aria-label={`Delete ${subtask.title} subtask`}
+                                      >
+                                        <X size={14} />
+                                      </button>
+                                    </div>
+                                  </div>
+                                ))}
+                                
+                                <button
+                                  onClick={() => {
+                                    setActiveTaskForSubtask(task.id);
+                                    setIsSubtaskModalOpen(true);
+                                  }}
+                                  className="flex items-center gap-1 text-xs text-primary hover:text-primary/80 transition-colors"
+                                >
+                                  <Plus size={14} />
+                                  <span>Add Subtask</span>
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                          
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => {
+                                setEditingTask(task);
+                                setIsTaskModalOpen(true);
+                              }}
+                              className="text-muted-foreground hover:text-primary transition-colors"
+                              aria-label={`Edit ${task.title} task`}
+                            >
+                              <Pencil size={16} />
+                            </button>
+                            {task.status === 'completed' && (
+                              <button
+                                onClick={() => toggleTaskCompletion(task.id, task.status)}
+                                className="text-muted-foreground hover:text-green-600 transition-colors"
+                                aria-label={`Restore ${task.title} task`}
+                                title="Restore task"
+                              >
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                  <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
+                                  <path d="M3 3v5h5"/>
+                                </svg>
+                              </button>
+                            )}
+                            <button
+                              onClick={() => handleDeleteTask(task.id)}
+                              className="text-muted-foreground hover:text-destructive transition-colors"
+                              aria-label={`Delete ${task.title} task`}
+                            >
+                              <X size={16} />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </AccordionContent>
+              </AccordionItem>
+            ))}
+          </Accordion>
         ) : (
           <div className="divide-y">
             {filteredTasks.map(task => (
@@ -811,7 +1043,7 @@ export function TasksView() {
                     >
                       <Pencil size={16} />
                     </button>
-                    {activeFilter === 'completed' && task.status === 'completed' && (
+                    {task.status === 'completed' && (
                       <button
                         onClick={() => toggleTaskCompletion(task.id, task.status)}
                         className="text-muted-foreground hover:text-green-600 transition-colors"

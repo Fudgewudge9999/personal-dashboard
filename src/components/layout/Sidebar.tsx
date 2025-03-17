@@ -17,6 +17,7 @@ import {
   LogIn,
   User,
   FileText,
+  GraduationCap,
 } from "lucide-react";
 
 interface SidebarLinkProps {
@@ -70,6 +71,7 @@ export function Sidebar() {
     { to: "/goals", icon: Target, label: "Goals" },
     { to: "/resources", icon: BookOpen, label: "Resources" },
     { to: "/notes", icon: FileText, label: "Notes" },
+    { to: "/tutoring", icon: GraduationCap, label: "Tutoring" },
     { to: "/analytics", icon: BarChart3, label: "Analytics" },
   ];
 

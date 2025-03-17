@@ -1,10 +1,12 @@
 import { CardContainer } from "../common/CardContainer";
 import { cn } from "@/lib/utils";
 import { AppButton } from "../common/AppButton";
-import { Play, Pause, RotateCcw, Clock, BarChart3, ArrowRight } from "lucide-react";
+import { Play, Pause, RotateCcw, Clock, BarChart3, ArrowRight, Trash2 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { Link } from "react-router-dom";
+import { useTimerStore } from "@/store/useTimerStore";
+import { Timer } from "../common/Timer";
 
 interface TimerWidgetProps {
   className?: string;
@@ -14,27 +16,62 @@ interface TimerSession {
   date: string;
   duration: number;
   completed: boolean;
+  actual_duration?: number;
 }
 
 export function TimerWidget({ className }: TimerWidgetProps) {
-  const [selectedDuration, setSelectedDuration] = useState(25);
-  const [minutes, setMinutes] = useState(25);
-  const [seconds, setSeconds] = useState(0);
-  const [isActive, setIsActive] = useState(false);
-  const [isPaused, setIsPaused] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [timerSessions, setTimerSessions] = useState<TimerSession[]>(() => {
     const savedSessions = localStorage.getItem('timerSessions');
-    return savedSessions ? JSON.parse(savedSessions) : [];
+    if (savedSessions) {
+      const sessions = JSON.parse(savedSessions);
+      // Filter out sessions that were less than 50% complete
+      return sessions.filter((session: TimerSession) => {
+        // Always include completed sessions
+        if (session.completed) return true;
+        
+        // If actual_duration is not available, include the session (backward compatibility)
+        if (session.actual_duration === undefined) return true;
+        
+        // Calculate completion percentage
+        const completionPercentage = session.actual_duration / session.duration;
+        
+        // Include sessions that are at least 50% complete
+        return completionPercentage >= 0.5;
+      });
+    }
+    return [];
   });
   
   const { toast } = useToast();
+  const { 
+    selectedDuration,
+    isActive,
+    isPaused,
+    minutes,
+    seconds
+  } = useTimerStore();
 
   // Load timer sessions from localStorage on component mount
   useEffect(() => {
     const savedSessions = localStorage.getItem('timerSessions');
     if (savedSessions) {
-      setTimerSessions(JSON.parse(savedSessions));
+      const sessions = JSON.parse(savedSessions);
+      // Filter out sessions that were less than 50% complete
+      const filteredSessions = sessions.filter((session: TimerSession) => {
+        // Always include completed sessions
+        if (session.completed) return true;
+        
+        // If actual_duration is not available, include the session (backward compatibility)
+        if (session.actual_duration === undefined) return true;
+        
+        // Calculate completion percentage
+        const completionPercentage = session.actual_duration / session.duration;
+        
+        // Include sessions that are at least 50% complete
+        return completionPercentage >= 0.5;
+      });
+      setTimerSessions(filteredSessions);
     }
   }, []);
 
@@ -43,83 +80,25 @@ export function TimerWidget({ className }: TimerWidgetProps) {
     localStorage.setItem('timerSessions', JSON.stringify(timerSessions));
   }, [timerSessions]);
 
+  // Listen for timer completion to add to history
   useEffect(() => {
-    let interval: number | undefined;
-
-    if (isActive && !isPaused) {
-      interval = window.setInterval(() => {
-        if (seconds === 0) {
-          if (minutes === 0) {
-            clearInterval(interval);
-            setIsActive(false);
-            
-            // Add completed session to history
-            const newSession: TimerSession = {
-              date: new Date().toISOString(),
-              duration: selectedDuration,
-              completed: true
-            };
-            setTimerSessions(prev => [newSession, ...prev].slice(0, 10));
-            
-            // Show toast notification
-            toast({
-              title: "Timer completed!",
-              description: `You completed a ${selectedDuration} minute focus session.`,
-            });
-          } else {
-            setMinutes(minutes - 1);
-            setSeconds(59);
-          }
-        } else {
-          setSeconds(seconds - 1);
-        }
-      }, 1000);
-    } else {
-      clearInterval(interval);
+    if (minutes === 0 && seconds === 0 && isActive === false && !isPaused) {
+      // Timer completed
+      const newSession: TimerSession = {
+        date: new Date().toISOString(),
+        duration: selectedDuration,
+        completed: true,
+        actual_duration: selectedDuration
+      };
+      setTimerSessions(prev => [newSession, ...prev].slice(0, 10));
+      
+      // Show toast notification
+      toast({
+        title: "Timer completed!",
+        description: `You completed a ${selectedDuration} minute focus session.`,
+      });
     }
-
-    return () => clearInterval(interval);
-  }, [isActive, isPaused, minutes, seconds, selectedDuration, toast]);
-
-  const toggleTimer = () => {
-    if (!isActive) {
-      setIsActive(true);
-      setIsPaused(false);
-      // Record starting a new session if it's a fresh start
-      if (minutes === selectedDuration && seconds === 0) {
-        const newSession: TimerSession = {
-          date: new Date().toISOString(),
-          duration: selectedDuration,
-          completed: false
-        };
-        setTimerSessions(prev => [newSession, ...prev].slice(0, 10));
-      }
-    } else {
-      setIsPaused(!isPaused);
-    }
-  };
-
-  const resetTimer = () => {
-    setIsActive(false);
-    setIsPaused(false);
-    setMinutes(selectedDuration);
-    setSeconds(0);
-  };
-
-  const changeTimerDuration = (duration: number | string) => {
-    const newDuration = typeof duration === 'string' ? parseInt(duration) || selectedDuration : duration;
-    if (newDuration > 0 && newDuration <= 180) { // Limit to 3 hours max
-      setSelectedDuration(newDuration);
-      if (!isActive) {
-        setMinutes(newDuration);
-        setSeconds(0);
-      }
-    }
-  };
-
-  const formatTime = (min: number, sec: number) => {
-    return `${min.toString().padStart(2, '0')}:${sec.toString().padStart(2, '0')}`;
-  };
+  }, [minutes, seconds, isActive, isPaused, selectedDuration, toast]);
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
@@ -128,6 +107,19 @@ export function TimerWidget({ className }: TimerWidgetProps) {
       day: 'numeric',
       hour: '2-digit',
       minute: '2-digit'
+    });
+  };
+
+  const deleteSession = (index: number) => {
+    // Remove the session at the specified index
+    const updatedSessions = [...timerSessions];
+    updatedSessions.splice(index, 1);
+    setTimerSessions(updatedSessions);
+    
+    // Show toast notification
+    toast({
+      title: "Session deleted",
+      description: "The focus session has been removed from your history.",
     });
   };
 
@@ -158,62 +150,7 @@ export function TimerWidget({ className }: TimerWidgetProps) {
         </div>
         
         {!showHistory ? (
-          <div className="flex flex-col items-center justify-center">
-            <div className="text-4xl font-medium mb-6 tracking-wider">
-              {formatTime(minutes, seconds)}
-            </div>
-            
-            <div className="flex gap-2 mb-4">
-              {[15, 25, 45, 60].map((duration) => (
-                <button
-                  key={duration}
-                  className={cn(
-                    "px-3 py-1 rounded text-sm transition-colors",
-                    selectedDuration === duration 
-                      ? "bg-primary text-primary-foreground" 
-                      : "bg-secondary hover:bg-secondary/80"
-                  )}
-                  onClick={() => changeTimerDuration(duration)}
-                  disabled={isActive}
-                >
-                  {duration}m
-                </button>
-              ))}
-              <input
-                type="number"
-                min="1"
-                max="180"
-                className={cn(
-                  "w-14 px-2 py-1 rounded text-sm transition-colors bg-secondary",
-                  "focus:outline-none focus:ring-2 focus:ring-ring",
-                  selectedDuration !== 15 && selectedDuration !== 25 && selectedDuration !== 45 && selectedDuration !== 60
-                    ? "ring-2 ring-primary"
-                    : ""
-                )}
-                placeholder="Custom"
-                value={selectedDuration !== 15 && selectedDuration !== 25 && selectedDuration !== 45 && selectedDuration !== 60 ? selectedDuration : ''}
-                onChange={(e) => changeTimerDuration(e.target.value)}
-                disabled={isActive}
-              />
-            </div>
-            
-            <div className="flex gap-2">
-              <AppButton
-                onClick={toggleTimer}
-                variant="primary"
-                icon={isActive && !isPaused ? <Pause size={18} /> : <Play size={18} />}
-              >
-                {isActive && !isPaused ? "Pause" : "Start"}
-              </AppButton>
-              <AppButton
-                onClick={resetTimer}
-                variant="outline"
-                icon={<RotateCcw size={18} />}
-              >
-                Reset
-              </AppButton>
-            </div>
-          </div>
+          <Timer showDurationOptions={true} size="sm" />
         ) : (
           <div className="space-y-3 max-h-64 overflow-y-auto pr-1">
             <h4 className="text-sm font-medium text-muted-foreground">Recent Sessions</h4>
@@ -224,16 +161,33 @@ export function TimerWidget({ className }: TimerWidgetProps) {
                   className="p-2 rounded-md border border-border flex justify-between items-center"
                 >
                   <div>
-                    <div className="text-sm font-medium">{session.duration}m session</div>
+                    <div className="text-sm font-medium">
+                      {session.actual_duration !== undefined 
+                        ? `${session.actual_duration}/${session.duration}m` 
+                        : `${session.duration}m session`}
+                    </div>
                     <div className="text-xs text-muted-foreground">{formatDate(session.date)}</div>
                   </div>
-                  <div className={cn(
-                    "text-xs px-2 py-1 rounded-full",
-                    session.completed 
-                      ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400" 
-                      : "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400"
-                  )}>
-                    {session.completed ? "Completed" : "Started"}
+                  <div className="flex items-center gap-2">
+                    <div className={cn(
+                      "text-xs px-2 py-1 rounded-full",
+                      session.completed 
+                        ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400" 
+                        : "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400"
+                    )}>
+                      {session.completed ? "Completed" : "Started"}
+                    </div>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        deleteSession(index);
+                      }}
+                      className="text-muted-foreground hover:text-destructive transition-colors"
+                      aria-label="Delete session"
+                      title="Delete session"
+                    >
+                      <Trash2 size={14} />
+                    </button>
                   </div>
                 </div>
               ))

@@ -98,7 +98,19 @@ export function FocusView() {
         })
       );
 
-      setTimerSessions(sessionsWithTasks);
+      // Filter out sessions that were less than 50% complete
+      const filteredSessions = sessionsWithTasks.filter(session => {
+        // Always include completed sessions
+        if (session.completed) return true;
+        
+        // Calculate completion percentage
+        const completionPercentage = session.actual_duration / session.duration;
+        
+        // Include sessions that are at least 50% complete
+        return completionPercentage >= 0.5;
+      });
+
+      setTimerSessions(filteredSessions);
     } catch (error) {
       console.error('Error loading sessions:', error);
       toast({
@@ -291,6 +303,55 @@ export function FocusView() {
     });
   };
 
+  const deleteSession = async (sessionId: string) => {
+    try {
+      // Get current user
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      if (userError) throw userError;
+      
+      if (!user) {
+        toast({
+          title: "Authentication Required",
+          description: "Please sign in to delete sessions.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      // First delete the associated tasks in the focus_session_tasks junction table
+      const { error: tasksError } = await supabase
+        .from('focus_session_tasks')
+        .delete()
+        .eq('session_id', sessionId);
+
+      if (tasksError) throw tasksError;
+
+      // Then delete the session itself
+      const { error: sessionError } = await supabase
+        .from('focus_sessions')
+        .delete()
+        .eq('id', sessionId)
+        .eq('user_id', user.id); // Ensure user owns the session
+
+      if (sessionError) throw sessionError;
+
+      // Update the local state to remove the deleted session
+      setTimerSessions(prev => prev.filter(session => session.id !== sessionId));
+      
+      toast({
+        title: "Session deleted",
+        description: "Your focus session has been deleted successfully.",
+      });
+    } catch (error) {
+      console.error('Error deleting session:', error);
+      toast({
+        title: "Error deleting session",
+        description: "There was a problem deleting your session. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
   return (
     <div className="space-y-8 animate-fade-in">
       <h1 className="text-3xl font-medium">Focus Session</h1>
@@ -345,6 +406,14 @@ export function FocusView() {
                                   ? "Finished"
                                   : "Interrupted"}
                             </div>
+                            <button
+                              onClick={() => deleteSession(session.id)}
+                              className="ml-auto text-muted-foreground hover:text-destructive transition-colors"
+                              aria-label="Delete session"
+                              title="Delete session"
+                            >
+                              <Trash2 size={14} />
+                            </button>
                           </div>
                           
                           {/* Progress bar */}

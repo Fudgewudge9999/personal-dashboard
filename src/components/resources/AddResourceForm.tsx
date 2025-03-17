@@ -1,14 +1,22 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { AppButton } from "../common/AppButton";
 import { Folder, File, Link, Upload, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
+interface Subcategory {
+  id: string;
+  name: string;
+  category_id: string;
+}
+
 interface AddResourceFormProps {
   categories: { id: string; name: string; count: number }[];
+  subcategories: Subcategory[];
   onSubmit: (resource: {
     title: string;
     type: "document" | "spreadsheet" | "link";
     category_id: string;
+    subcategory_id?: string;
     url?: string;
     description?: string;
     file_path?: string;
@@ -18,17 +26,31 @@ interface AddResourceFormProps {
   onCancel: () => void;
 }
 
-export function AddResourceForm({ categories, onSubmit, onCancel }: AddResourceFormProps) {
+export function AddResourceForm({ categories, subcategories, onSubmit, onCancel }: AddResourceFormProps) {
   const [title, setTitle] = useState("");
   const [type, setType] = useState<"document" | "spreadsheet" | "link">("document");
   const [categoryId, setCategoryId] = useState(categories[0]?.id || "");
+  const [subcategoryId, setSubcategoryId] = useState<string | undefined>(undefined);
   const [url, setUrl] = useState("");
   const [description, setDescription] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [isUploading, setIsUploading] = useState(false);
+  const [filteredSubcategories, setFilteredSubcategories] = useState<Subcategory[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  
+  // Filter subcategories when category changes
+  useEffect(() => {
+    if (categoryId) {
+      const filtered = subcategories.filter(sub => sub.category_id === categoryId);
+      setFilteredSubcategories(filtered);
+      // Reset subcategory selection when category changes
+      setSubcategoryId(undefined);
+    } else {
+      setFilteredSubcategories([]);
+    }
+  }, [categoryId, subcategories]);
   
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
@@ -100,6 +122,7 @@ export function AddResourceForm({ categories, onSubmit, onCancel }: AddResourceF
         title,
         type,
         category_id: categoryId,
+        subcategory_id: subcategoryId,
         url: url.trim() || undefined,
         description: description.trim() || undefined,
         file_path: fileData?.path,
@@ -252,9 +275,34 @@ export function AddResourceForm({ categories, onSubmit, onCancel }: AddResourceF
           className="w-full p-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-ring"
           required
         >
-          {categories.map((category) => (
-            <option key={category.id} value={category.id}>
-              {category.name}
+          {categories.length === 0 ? (
+            <option value="" disabled>
+              No categories available
+            </option>
+          ) : (
+            categories.map((category) => (
+              <option key={category.id} value={category.id}>
+                {category.name}
+              </option>
+            ))
+          )}
+        </select>
+      </div>
+      
+      <div className="space-y-2">
+        <label htmlFor="resource-subcategory" className="text-sm font-medium">
+          Subcategory (Optional)
+        </label>
+        <select
+          id="resource-subcategory"
+          value={subcategoryId || ""}
+          onChange={(e) => setSubcategoryId(e.target.value || undefined)}
+          className="w-full p-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-ring"
+        >
+          <option value="">None</option>
+          {filteredSubcategories.map((subcategory) => (
+            <option key={subcategory.id} value={subcategory.id}>
+              {subcategory.name}
             </option>
           ))}
         </select>
@@ -268,18 +316,25 @@ export function AddResourceForm({ categories, onSubmit, onCancel }: AddResourceF
           id="resource-description"
           value={description}
           onChange={(e) => setDescription(e.target.value)}
-          placeholder="Add details about this resource"
-          className="w-full p-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-ring"
-          rows={3}
+          placeholder="Add a brief description of this resource..."
+          className="w-full p-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-ring min-h-[100px]"
         />
       </div>
       
-      <div className="flex justify-end gap-2 pt-4">
-        <AppButton type="button" variant="outline" onClick={onCancel} disabled={isSubmitting || isUploading}>
+      <div className="flex justify-end space-x-2 pt-4">
+        <AppButton
+          variant="outline"
+          onClick={onCancel}
+          disabled={isSubmitting}
+        >
           Cancel
         </AppButton>
-        <AppButton type="submit" disabled={!title.trim() || !categoryId || isSubmitting || isUploading || (type !== "link" && !selectedFile)}>
-          {isSubmitting || isUploading ? "Uploading..." : "Add Resource"}
+        <AppButton
+          type="submit"
+          disabled={isSubmitting || !title.trim() || !categoryId || (type === "link" && !url.trim())}
+          isLoading={isSubmitting}
+        >
+          Add Resource
         </AppButton>
       </div>
     </form>

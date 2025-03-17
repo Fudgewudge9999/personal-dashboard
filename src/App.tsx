@@ -6,6 +6,7 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from "./context/AuthContext";
 import { ProtectedRoute } from "./components/auth/ProtectedRoute";
 import { RedirectToLogin } from "./components/auth/RedirectToLogin";
+import { TimerInitializer } from "./components/common/TimerInitializer";
 import Index from "./pages/Index";
 import Calendar from "./pages/Calendar";
 import Tasks from "./pages/Tasks";
@@ -26,6 +27,7 @@ import EventDetails from "./pages/EventDetails";
 import EditEvent from "./pages/EditEvent";
 import NewNote from "./pages/NewNote";
 import NoteDetail from "./pages/NoteDetail";
+import Tutoring from "./pages/Tutoring";
 
 const queryClient = new QueryClient();
 
@@ -35,6 +37,7 @@ const App = () => (
       <TooltipProvider>
         <Toaster />
         <Sonner />
+        <TimerInitializer />
         <BrowserRouter>
           <Routes>
             {/* Initial redirect to login if not authenticated */}
@@ -151,6 +154,14 @@ const App = () => (
             <Route 
               path="/profile" 
               element={<ProfilePage />} 
+            />
+            <Route 
+              path="/tutoring" 
+              element={
+                <ProtectedRoute>
+                  <Tutoring />
+                </ProtectedRoute>
+              } 
             />
             
             {/* Not found route */}
